@@ -82,6 +82,9 @@ class Database:
         ("line_items", "relevance_by", "TEXT"),
         ("line_items", "relevance_conf", "REAL"),
         ("line_items", "relevance_note", "TEXT"),
+        ("line_items", "insurable", "INTEGER"),
+        ("orders", "vessel", "TEXT"),
+        ("orders", "reference", "TEXT"),
     )
 
     def migrate(self) -> None:

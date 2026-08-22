@@ -121,6 +121,9 @@ okey report cost           # spend by system, vendor, month
 okey report risk           # findings, most severe first
 okey report spec           # engineering risk from the installed specification
 okey report reward         # what the spending actually returned
+okey report insurance --pdf out.pdf   # equipment + professional install, for an insurer
+okey add invoice 2414.06 --vendor "Poseidon Marine" --system professional_install \
+    --date 2026-07-31 --ref 1199 --note "Service invoice" 
 okey log labor 12 --system electronics_nav --note "GO9 install"
 okey log nights 14 --from 2026-07-01
 okey report unclassified   # items awaiting attribution
@@ -260,6 +263,36 @@ Recovery rates are heuristics with wide error bars — electronics date fastest
 They live in one declared table with a stated basis per system, visible via
 `okey report reward --assumptions`, for the same reason the specification
 assumptions do: a number you cannot see is a number you cannot argue with.
+
+## Insurance schedule
+
+`okey report insurance --pdf schedule.pdf` produces a document for an
+underwriter: equipment fitted to the vessel, plus the professional labor that
+fitted it.
+
+It is deliberately narrower than the cost report. Slip fees, registration,
+title, insurance premiums, transport, storage, consumables and tools are
+excluded — each by a named rule the PDF prints, with its amount, so the
+schedule states its own boundaries rather than quietly narrowing the picture.
+Any single item can be forced in or out with `--insurable` / `--not-insurable`,
+and a hand-excluded item still appears in the excluded list.
+
+**Vessel attribution matters here.** Invoices exist in the same mailbox for a
+previous boat. Orders carry a `vessel` field and the schedule filters on it, so
+a prior vessel's work can never land on this one's schedule.
+
+## Recording invoices by hand
+
+Most real marine invoices arrive as a PDF attachment or a portal link with no
+amount in the email body — Shopmonkey shops (AVC Marine, Poseidon Marine) and
+marina statements both work this way. No parser can recover those, so:
+
+```bash
+okey add invoice 1526.17 --vendor "Port Royale Marina" --system moorage \
+    --date 2026-08-22 --ref PR-2026-08 --note "September slip"
+okey systems          # list the system keys
+okey report unpriced  # invoices the parser found but could not price
+```
 
 ## Tests
 

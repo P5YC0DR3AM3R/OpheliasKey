@@ -19,6 +19,7 @@ from .classify.rules import apply_rules
 from .classify.taxonomy import seed_systems, seed_vessel_meta
 from .config import get_settings
 from .db.database import connect, fmt_money, utcnow
+from .parsing.vendors_util import resolve_vendor
 from .parsing.registry import parse_pending, reset_derived
 
 app = typer.Typer(
@@ -164,6 +165,86 @@ def gmail_setup():
         )
     else:
         console.print("\n[green]Ready. Run `okey ingest gmail --full`.[/]")
+
+
+add_app = typer.Typer(help="Record invoices the parser cannot read.", no_args_is_help=True)
+app.add_typer(add_app, name="add")
+
+VESSEL_DEFAULT = "Ophelia's Key"
+
+
+@add_app.command("invoice")
+def add_invoice(
+    amount: float = typer.Argument(..., help="Invoice total in dollars."),
+    vendor: str = typer.Option(..., "--vendor", help="Vendor name."),
+    system: str = typer.Option(..., "--system", help="Boat system key."),
+    date: str = typer.Option(..., "--date", help="YYYY-MM-DD."),
+    reference: str = typer.Option("", "--ref", help="Invoice or statement number."),
+    note: str = typer.Option("", "--note", help="What it was for."),
+    vessel: str = typer.Option(VESSEL_DEFAULT, "--vessel", help="Which vessel."),
+    personal: bool = typer.Option(False, "--personal", help="Not project spend."),
+    insurable: bool = typer.Option(
+        None, "--insurable/--not-insurable",
+        help="Override whether this appears on the insurance schedule."),
+):
+    """Record an invoice by hand.
+
+    Most real marine invoices arrive as a PDF or a portal link with no amount in
+    the email body, so they cannot be parsed. Entering them here keeps them out
+    of the blind spot rather than out of the totals.
+    """
+    db = _db()
+    row = db.one("SELECT id FROM boat_systems WHERE key=?", (system,))
+    if row is None:
+        console.print(f"[red]unknown system '{system}'[/]")
+        console.print("[dim]list them with: okey systems[/]")
+        raise typer.Exit(1)
+
+    cents = int(round(amount * 100))
+    vendor_id = resolve_vendor(db, name=vendor)
+    external = reference or f"{vendor}-{date}-{cents}"
+
+    existing = db.one(
+        "SELECT id FROM orders WHERE source='manual' AND external_order_id=?", (external,))
+    if existing:
+        console.print(f"[yellow]already recorded as order {existing['id']}[/]")
+        raise typer.Exit(1)
+
+    with db.tx():
+        cur = db.execute(
+            """INSERT INTO orders (source, external_order_id, vendor_id, ordered_at,
+                 status, total_cents, currency, vessel, reference, created_at, updated_at)
+               VALUES ('manual',?,?,?,'delivered',?,'USD',?,?,?,?)""",
+            (external, vendor_id, f"{date}T00:00:00Z", cents, vessel,
+             reference or None, utcnow(), utcnow()),
+        )
+        order_id = int(cur.lastrowid)
+        db.execute(
+            """INSERT INTO line_items (order_id, line_no, description, quantity,
+                 unit_price_cents, total_cents, system_id, classified_by, classify_conf,
+                 classified_at, relevance, relevance_by, relevance_conf, insurable)
+               VALUES (?,0,?,1,?,?,?,'manual',1.0,?,?, 'manual',1.0,?)""",
+            (order_id, note or f"{vendor} {reference or 'invoice'}".strip(), cents, cents,
+             row["id"], utcnow(), "personal" if personal else "boat",
+             None if insurable is None else int(insurable)),
+        )
+    console.print(
+        f"[green]recorded[/] {vendor} {reference or ''} {fmt_money(cents)} → {system}"
+        + (f" [dim]({vessel})[/]" if vessel != VESSEL_DEFAULT else "")
+    )
+
+
+@app.command()
+def systems():
+    """List boat system keys."""
+    db = _db()
+    table = Table("key", "name", "capital", "description")
+    for row in db.query(
+        "SELECT key, name, is_capital, description FROM boat_systems ORDER BY sort_order"
+    ):
+        table.add_row(row["key"], row["name"], "yes" if row["is_capital"] else "no",
+                      (row["description"] or "")[:52])
+    console.print(table)
 
 
 @app.command()
@@ -485,6 +566,61 @@ def report_unpriced():
         table.add_row((row["occurred_at"] or "—")[:10], row["external_id"][:20],
                       row["parse_error"][:64])
     console.print(table)
+
+
+@report_app.command("insurance")
+def report_insurance(
+    pdf: str = typer.Option("", "--pdf", help="Write a PDF to this path."),
+    vessel: str = typer.Option("Ophelia's Key", "--vessel", help="Restrict to one vessel."),
+):
+    """Equipment and professional installation, for an insurer.
+
+    Deliberately narrower than the cost report: slip fees, registration, title,
+    insurance premiums, transport, storage, consumables and tools are excluded,
+    each by a named rule that the schedule prints.
+    """
+    from .analysis.insurance import schedule
+
+    db = _db()
+    report = schedule(db, vessel=vessel)
+
+    console.print(
+        Panel(
+            f"Vessel                 {report['vessel']}\n"
+            f"Period                 {report['period_start'] or '—'} to "
+            f"{report['period_end'] or '—'}\n\n"
+            f"Equipment              {fmt_money(report['equipment_total_cents'])}\n"
+            f"Professional install   {fmt_money(report['installation_total_cents'])}\n"
+            f"[bold]Total claimed          {fmt_money(report['total_cents'])}[/]\n\n"
+            f"[dim]Excluded               {fmt_money(report['excluded_total_cents'])} "
+            f"(slip, fees, transport, consumables, tools)[/]",
+            title="Ophelia's Key — insurance schedule", border_style="blue",
+        )
+    )
+
+    for heading, groups in (("Equipment", report["equipment"]),
+                            ("Professional installation", report["installation"])):
+        if not groups:
+            continue
+        table = Table("system", "items", "amount", title=heading)
+        for group in groups:
+            table.add_row(group["name"], str(len(group["items"])),
+                          fmt_money(group["total_cents"]))
+        console.print(table)
+
+    if report["excluded"]:
+        table = Table("excluded", "amount", "why")
+        for entry in report["excluded"]:
+            table.add_row(entry["name"], fmt_money(entry["total_cents"]), entry["reason"][:56])
+        console.print(table)
+
+    if pdf:
+        from datetime import datetime, timezone
+
+        from .analysis.insurance_pdf import render
+
+        path = render(report, pdf, prepared_on=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        console.print(f"\n[green]PDF written to[/] {path}")
 
 
 @report_app.command("reward")

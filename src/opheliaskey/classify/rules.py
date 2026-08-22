@@ -154,14 +154,26 @@ RULES: dict[str, list[str]] = {
         "sealant", "grease", "penetrating oil", "wd-40", "anti-seize", "starboard",
         "adhesive", "caulk", "self amalgamating",
     ],
+    "professional_install": [
+        "installation", "install labor", "labor", "service call", "commissioning",
+        "repair order", "shop rate", "technician", "rigging labor", "mobile service",
+        "diagnostic", "sea trial", "workmanship",
+    ],
     "yard_services": [
-        "haul out", "haul-out", "boatyard", "boat yard", "storage fee", "yard storage",
-        "blocking", "travel lift", "travelift", "launch", "pressure wash", "labor",
-        "shipwright", "yard bill", "bottom wash", "slip",
+        "haul out", "haul-out", "boatyard", "boat yard", "blocking", "travel lift",
+        "travelift", "launch", "pressure wash", "shipwright", "yard bill",
+        "bottom wash", "transport", "hauling", "delivery of boat", "shipping listing",
+        "dry storage", "storage fee", "yard storage",
+    ],
+    "moorage": [
+        "slip", "slip fee", "slip rent", "moorage", "marina", "dockage", "dock fee",
+        "pump out", "pump-out", "live aboard fee", "liveaboard fee", "dock electric",
+        "shore power fee", "wet slip", "monthly statement",
     ],
     "fees_admin": [
-        "registration", "decal", "documentation", "title", "survey", "insurance",
-        "moorage", "marina", "permit", "boat decal", "registration number", "notary",
+        "registration", "decal", "documentation", "title", "retitle", "survey",
+        "insurance", "premium", "permit", "boat decal", "registration number",
+        "notary", "bill of sale", "temp tag", "tag fee",
     ],
 }
 

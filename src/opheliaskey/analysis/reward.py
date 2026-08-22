@@ -52,6 +52,8 @@ RECOVERY_RATES: dict[str, tuple[float, str]] = {
     "dive":             (0.25, "Specialist gear, thin used market"),
     "connectivity":     (0.20, "Subscription-tied hardware, obsolesces quickly"),
     "av_security":      (0.20, "Consumer-grade electronics, steep depreciation"),
+    "professional_install": (0.35, "Quality installation supports value but is rarely itemised by a buyer"),
+    "moorage":          (0.00, "Consumed"),
     "consumables":      (0.00, "Consumed"),
     "yard_services":    (0.00, "Consumed"),
     "fees_admin":       (0.00, "Consumed"),

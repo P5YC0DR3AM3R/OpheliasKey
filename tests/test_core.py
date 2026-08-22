@@ -984,3 +984,112 @@ def test_order_number_regex_declines_when_there_is_no_id():
     from opheliaskey.parsing.email_parser import ORDER_NO_RE
 
     assert ORDER_NO_RE.search("Your order Number is pending") is None
+
+
+# --- insurance schedule -----------------------------------------------------
+
+from opheliaskey.analysis.insurance import EXCLUDED_SYSTEMS, schedule  # noqa: E402
+
+
+def _invoice(db, *, system, cents, vessel="Ophelia's Key", desc="item",
+             insurable=None, relevance="boat", ref=None, date="2026-08-01"):
+    cur = db.execute(
+        """INSERT INTO orders (source, external_order_id, ordered_at, status, total_cents,
+             vessel, reference, created_at, updated_at)
+           VALUES ('manual',?,?,'delivered',?,?,?,?,?)""",
+        (f"i{db.one('SELECT COUNT(*) c FROM orders')['c']}", f"{date}T00:00:00Z",
+         cents, vessel, ref, utcnow(), utcnow()))
+    order_id = int(cur.lastrowid)
+    sys_id = db.one("SELECT id FROM boat_systems WHERE key=?", (system,))["id"]
+    db.execute(
+        """INSERT INTO line_items (order_id, line_no, description, quantity, total_cents,
+             system_id, relevance, insurable) VALUES (?,0,?,1,?,?,?,?)""",
+        (order_id, desc, cents, sys_id, relevance, insurable))
+    return order_id
+
+
+def test_schedule_includes_equipment_and_professional_install(db):
+    _invoice(db, system="electronics_nav", cents=150000, desc="Chartplotter")
+    _invoice(db, system="professional_install", cents=318000, desc="Install labor")
+    report = schedule(db, vessel="Ophelia's Key")
+    assert report["equipment_total_cents"] == 150000
+    assert report["installation_total_cents"] == 318000
+    assert report["total_cents"] == 468000
+
+
+@pytest.mark.parametrize("system", ["moorage", "fees_admin", "yard_services",
+                                    "consumables", "tools"])
+def test_operating_costs_are_excluded_with_a_stated_reason(db, system):
+    """The insurer gets property and the labor that fitted it — not the cost of
+    keeping, registering or insuring the boat."""
+    _invoice(db, system=system, cents=100000)
+    report = schedule(db, vessel="Ophelia's Key")
+    assert report["total_cents"] == 0
+    assert report["excluded_total_cents"] == 100000
+    assert report["excluded"][0]["reason"] == EXCLUDED_SYSTEMS[system]
+
+
+def test_previous_vessel_never_reaches_this_schedule(db):
+    """AVC Marine invoiced work on a 1986 SeaRay before this boat was bought.
+    Without vessel attribution it would land on Ophelia's Key's schedule."""
+    _invoice(db, system="electronics_nav", cents=500000, vessel="1986 SeaRay 268 SunDancer",
+             desc="SeaRay stereo")
+    _invoice(db, system="electronics_nav", cents=150000, desc="Ophelia's Key chartplotter")
+
+    report = schedule(db, vessel="Ophelia's Key")
+    assert report["total_cents"] == 150000
+    descriptions = [i["description"] for g in report["equipment"] for i in g["items"]]
+    assert "SeaRay stereo" not in descriptions
+
+
+def test_personal_items_never_reach_the_schedule(db):
+    _invoice(db, system="electronics_nav", cents=90000, relevance="personal")
+    assert schedule(db, vessel="Ophelia's Key")["total_cents"] == 0
+
+
+def test_cancelled_orders_are_excluded(db):
+    """Two Amazon orders were cancelled for failed 3D Secure. Billing an
+    insurer for them would be a false claim."""
+    order_id = _invoice(db, system="electronics_nav", cents=120000)
+    db.execute("UPDATE orders SET status='cancelled' WHERE id=?", (order_id,))
+    assert schedule(db, vessel="Ophelia's Key")["total_cents"] == 0
+
+
+def test_manual_override_can_force_inclusion_or_exclusion(db):
+    """Judgement calls have to be overridable per item, or the schedule cannot
+    be corrected without editing code."""
+    _invoice(db, system="consumables", cents=40000, insurable=1, desc="Bedding compound")
+    _invoice(db, system="electronics_nav", cents=70000, insurable=0, desc="Handheld GPS")
+    report = schedule(db, vessel="Ophelia's Key")
+    assert report["total_cents"] == 40000
+    assert report["excluded_total_cents"] == 70000
+
+
+def test_unattributed_boat_spend_is_excluded_but_reported(db):
+    """Spend with no system has no basis for inclusion, but must still be
+    visible so the schedule is not quietly short."""
+    cur = db.execute(
+        """INSERT INTO orders (source, external_order_id, ordered_at, status, total_cents,
+             created_at, updated_at) VALUES ('manual','x','2026-08-01T00:00:00Z',
+             'delivered',5000,?,?)""", (utcnow(), utcnow()))
+    db.execute(
+        "INSERT INTO line_items (order_id, line_no, description, total_cents, relevance) "
+        "VALUES (?,0,'mystery part',5000,'boat')", (int(cur.lastrowid),))
+    report = schedule(db, vessel="Ophelia's Key")
+    assert report["total_cents"] == 0
+    assert report["excluded_total_cents"] == 5000
+    assert report["excluded"][0]["key"] == "unattributed"
+
+
+def test_pdf_renders(db, tmp_path):
+    _invoice(db, system="electronics_nav", cents=150000, desc="Chartplotter", ref="19904")
+    _invoice(db, system="professional_install", cents=318000, desc="Install labor")
+    _invoice(db, system="moorage", cents=152617, desc="Slip")
+
+    from opheliaskey.analysis.insurance_pdf import render
+
+    out = render(schedule(db, vessel="Ophelia's Key"), tmp_path / "s.pdf",
+                 prepared_on="2026-08-22")
+    assert out.exists()
+    assert out.stat().st_size > 2000
+    assert out.read_bytes().startswith(b"%PDF")

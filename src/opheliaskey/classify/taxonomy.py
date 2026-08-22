@@ -78,10 +78,17 @@ BOAT_SYSTEMS: list[tuple[str, str, int, int, str]] = [
      "Tools bought for the project; retain residual value"),
     ("consumables",      "Consumables & Shop",     240, 0,
      "Abrasives, tape, fasteners, sealant, solvents, PPE, wire, connectors"),
-    ("yard_services",    "Yard & Labor",           250, 0,
-     "Haul-out, storage, blocking, contracted labor, launch, hauling"),
+    # Contracted marine service labor. Separate from yard_services because it
+    # becomes part of the installed value of the vessel, and an insurer will
+    # credit it — whereas haul-out and storage are consumed services.
+    ("professional_install", "Professional Installation", 245, 1,
+     "Contracted marine service: installation, commissioning, rigging of equipment"),
+    ("yard_services",    "Yard, Storage & Transport", 250, 0,
+     "Haul-out, blocking, storage, launch, hauling and transport"),
+    ("moorage",          "Slip & Moorage",         255, 0,
+     "Slip rent, marina dues, pump-out, dock electric, live-aboard fees"),
     ("fees_admin",       "Fees & Admin",           260, 0,
-     "Registration, decals, documentation, survey, insurance, moorage"),
+     "Registration, title, decals, documentation, survey, insurance premiums"),
 
     ("uncategorized",    "Uncategorized",          900, 0,
      "Awaiting classification"),

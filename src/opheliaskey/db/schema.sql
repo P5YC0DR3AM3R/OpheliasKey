@@ -73,6 +73,10 @@ CREATE TABLE IF NOT EXISTS orders (
     total_cents       INTEGER NOT NULL DEFAULT 0,
     currency          TEXT    NOT NULL DEFAULT 'USD',
     raw_document_id   INTEGER REFERENCES raw_documents(id),
+    -- Which vessel this order belongs to. A prior boat's invoices must never
+    -- reach this boat's cost, reward or insurance figures.
+    vessel            TEXT,
+    reference         TEXT,                             -- invoice / statement number
     created_at        TEXT    NOT NULL,
     updated_at        TEXT    NOT NULL,
     UNIQUE (source, external_order_id)
@@ -101,6 +105,9 @@ CREATE TABLE IF NOT EXISTS line_items (
     relevance_by     TEXT,                   -- rule | llm | manual
     relevance_conf   REAL,
     relevance_note   TEXT,
+    -- NULL derives from the system; 1 or 0 forces inclusion or exclusion from
+    -- the insurance schedule.
+    insurable        INTEGER,
     UNIQUE (order_id, line_no)
 );
 CREATE INDEX IF NOT EXISTS idx_items_system ON line_items (system_id);
