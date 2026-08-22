@@ -170,6 +170,10 @@ RULES: dict[str, list[str]] = {
         "pump out", "pump-out", "live aboard fee", "liveaboard fee", "dock electric",
         "shore power fee", "wet slip", "monthly statement",
     ],
+    "vessel_acquisition": [
+        "purchase price", "vessel purchase", "boat purchase", "hull purchase",
+        "acquisition", "purchase of vessel",
+    ],
     "fees_admin": [
         "registration", "decal", "documentation", "title", "retitle", "survey",
         "insurance", "premium", "permit", "boat decal", "registration number",

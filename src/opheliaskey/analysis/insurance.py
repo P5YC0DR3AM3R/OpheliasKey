@@ -22,6 +22,8 @@ EXCLUDED_SYSTEMS: dict[str, str] = {
     "consumables": "Shop consumables — used up rather than installed as property",
     "tools": "Tools — retained by the owner, do not convey with the vessel",
     "uncategorized": "Not yet attributed to a system",
+    "vessel_acquisition": "Purchase price of the vessel itself — shown separately as "
+                          "basis of value, not as equipment added to it",
 }
 
 
@@ -114,6 +116,16 @@ def schedule(db: Database, vessel: str | None = None) -> dict:
             "reason": reason, "forced": bool(r["forced"]),
         })
 
+    acq = db.one(
+        f"""SELECT COALESCE(SUM(li.total_cents),0) AS amt FROM line_items li
+            JOIN orders o ON o.id = li.order_id
+            JOIN boat_systems bs ON bs.id = li.system_id
+            WHERE li.relevance='boat' AND o.status != 'cancelled'
+              AND bs.key = 'vessel_acquisition' {vessel_clause}""",
+        params,
+    )
+    acquisition = int(acq["amt"]) if acq else 0
+
     meta = {r["key"]: r["value"] for r in db.query("SELECT key, value FROM project_meta")}
     dates = [i["date"] for g in list(equipment.values()) + list(installation.values())
              for i in g["items"] if i["date"]]
@@ -126,6 +138,8 @@ def schedule(db: Database, vessel: str | None = None) -> dict:
         "equipment_total_cents": equipment_total,
         "installation_total_cents": install_total,
         "total_cents": equipment_total + install_total,
+        "acquisition_cents": acquisition,
+        "basis_of_value_cents": acquisition + equipment_total + install_total,
         "item_count": len(rows),
         "excluded": excluded,
         "excluded_total_cents": sum(e["total_cents"] for e in excluded),

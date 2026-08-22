@@ -90,6 +90,11 @@ BOAT_SYSTEMS: list[tuple[str, str, int, int, str]] = [
     ("fees_admin",       "Fees & Admin",           260, 0,
      "Registration, title, decals, documentation, survey, insurance premiums"),
 
+    # The vessel itself. Kept apart from every improvement system so that
+    # "what the boat cost" and "what has been put into it" never blur together.
+    ("vessel_acquisition", "Vessel Acquisition",   270, 1,
+     "Purchase price of the hull, and acquisition costs of the vessel itself"),
+
     ("uncategorized",    "Uncategorized",          900, 0,
      "Awaiting classification"),
 ]
@@ -103,6 +108,7 @@ VESSEL_META: dict[str, str] = {
     "vessel_make_model": "1988 Cruisers Yachts Esprit 3370, white, express cruiser",
     "vessel_condition": "Good (Georgia DOR T-22B inspection, July 2026)",
     "acquisition": "Bill of sale, no prior title",
+    "purchase_price": "$15,000 (22 July 2026)",
     "registration": "State of Montana permanent registration, Granite County",
     "registration_mark": "MT9740CA",
     "hin": "CRS7251BA888",

@@ -247,6 +247,52 @@ def unpriced_invoices(db: Database) -> list[dict]:
     ]
 
 
+def refit_against_hull_value(db: Database) -> list[dict]:
+    """Improvement spend measured against what the boat cost.
+
+    The classic way a boat project goes wrong is not any single overrun — it is
+    the total quietly passing the hull's value while each invoice still looks
+    reasonable on its own. Stating the ratio makes that visible early."""
+    row = db.one(
+        """SELECT COALESCE(SUM(CASE WHEN bs.key = 'vessel_acquisition'
+                                    THEN li.total_cents ELSE 0 END), 0) AS hull,
+                  COALESCE(SUM(CASE WHEN bs.key != 'vessel_acquisition'
+                                    THEN li.total_cents ELSE 0 END), 0) AS refit
+           FROM line_items li
+           JOIN orders o ON o.id = li.order_id
+           LEFT JOIN boat_systems bs ON bs.id = li.system_id
+           WHERE li.relevance = 'boat' AND o.status != 'cancelled'"""
+    )
+    hull = int(row["hull"]) if row else 0
+    refit = int(row["refit"]) if row else 0
+    if not hull or not refit:
+        return []
+
+    ratio = refit / hull
+    if ratio < 0.5:
+        return []
+    if ratio >= 1.0:
+        severity, verb = "high", "exceeds"
+    elif ratio >= 0.75:
+        severity, verb = "medium", "approaches"
+    else:
+        severity, verb = "low", "is a large fraction of"
+
+    return [
+        _finding(
+            severity,
+            "refit_vs_hull_value",
+            f"Improvement spend {verb} the purchase price",
+            f"{ratio*100:.0f}% of the {hull/100:,.0f} dollar hull value has been spent on "
+            f"improvements. Combined outlay is ${(hull + refit)/100:,.0f}. Refit spend does "
+            f"not return dollar-for-dollar at resale, so the boat is very unlikely to be "
+            f"worth the combined figure — see `okey report reward` for the recoverable "
+            f"estimate.",
+            refit,
+        )
+    ]
+
+
 def risk_report(db: Database) -> dict:
     findings = (
         budget_overruns(db)
@@ -258,6 +304,7 @@ def risk_report(db: Database) -> dict:
         + line_item_coverage(db)
         + unreviewed_spend(db)
         + unpriced_invoices(db)
+        + refit_against_hull_value(db)
     )
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 9), -(f["amount_cents"] or 0)))
 

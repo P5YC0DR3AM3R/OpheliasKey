@@ -163,6 +163,30 @@ def render(report: dict, out_path: Path | str, prepared_on: str) -> Path:
                        f'{len(report["equipment"]) + len(report["installation"])} systems.',
                        st["small"])]
 
+    # The hull is not equipment fitted to the hull, so it is stated separately
+    # rather than folded into the claimed total — an underwriter setting agreed
+    # value needs both figures and should not have to disentangle them.
+    if report.get("acquisition_cents"):
+        flow += [Spacer(1, 14), Paragraph("Basis of value", st["h2"])]
+        basis = Table([
+            [Paragraph("Vessel acquisition (purchase price)", st["cell"]),
+             Paragraph(fmt_money(report["acquisition_cents"]), st["num"])],
+            [Paragraph("Equipment and professional installation (above)", st["cell"]),
+             Paragraph(fmt_money(report["total_cents"]), st["num"])],
+            [Paragraph("<b>Total invested in the vessel</b>", st["cell"]),
+             Paragraph(f'<b>{fmt_money(report["basis_of_value_cents"])}</b>', st["num"])],
+        ], colWidths=[5.2*inch, 1.9*inch])
+        basis.setStyle(TableStyle([
+            ("LINEABOVE", (0, 2), (-1, 2), 0.8, INK),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        flow += [basis, Spacer(1, 5), Paragraph(
+            "The purchase price is stated for reference only and is not part of the "
+            "claimed equipment and installation total above.", st["small"])]
+
     if report["equipment"]:
         flow.append(Paragraph("Equipment", st["h2"]))
         flow += _detail_table(report["equipment"], st)

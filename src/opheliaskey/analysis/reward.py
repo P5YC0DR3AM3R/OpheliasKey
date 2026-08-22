@@ -30,6 +30,8 @@ from .spec import ASSUMPTIONS, load_spec
 # judgement calls informed by how brokers actually discount: electronics date
 # fastest, documented engine work holds best, and anything consumed is gone.
 RECOVERY_RATES: dict[str, tuple[float, str]] = {
+    "vessel_acquisition": (0.80, "A 1988 hull bought near the bottom of its depreciation "
+                                 "curve holds value far better than anything fitted to it"),
     "propulsion":       (0.50, "Documented engine and drivetrain work is a real value driver"),
     "trailer":          (0.60, "Separately sellable and holds value independently"),
     "tender":           (0.55, "Separately sellable"),

@@ -1093,3 +1093,56 @@ def test_pdf_renders(db, tmp_path):
     assert out.exists()
     assert out.stat().st_size > 2000
     assert out.read_bytes().startswith(b"%PDF")
+
+
+# --- vessel acquisition -----------------------------------------------------
+
+from opheliaskey.analysis.risk import refit_against_hull_value  # noqa: E402
+
+
+def test_hull_purchase_is_not_equipment_added_to_the_hull(db):
+    """The purchase price belongs on the schedule as basis of value, never
+    inside the claimed equipment-and-installation total."""
+    _invoice(db, system="vessel_acquisition", cents=1500000, desc="Purchase price")
+    _invoice(db, system="electronics_nav", cents=294800, desc="Chartplotter")
+    _invoice(db, system="professional_install", cents=1439593, desc="Install")
+
+    report = schedule(db, vessel="Ophelia's Key")
+    assert report["total_cents"] == 294800 + 1439593        # claim excludes the hull
+    assert report["acquisition_cents"] == 1500000
+    assert report["basis_of_value_cents"] == 1500000 + 294800 + 1439593
+    assert any(e["key"] == "vessel_acquisition" for e in report["excluded"])
+
+
+def test_refit_ratio_is_measured_against_the_hull_not_total_spend(db):
+    """The ratio that matters is improvements against what the boat cost."""
+    _invoice(db, system="vessel_acquisition", cents=1500000)
+    _invoice(db, system="professional_install", cents=1957641)
+
+    findings = refit_against_hull_value(db)
+    assert len(findings) == 1
+    assert findings[0]["severity"] == "high"        # refit exceeds hull value
+    assert findings[0]["amount_cents"] == 1957641
+
+
+@pytest.mark.parametrize("refit,severity", [
+    (600000, "low"),        # 40% -> below the floor, no finding
+    (800000, "low"),        # 53%
+    (1200000, "medium"),    # 80%
+    (1600000, "high"),      # 107%
+])
+def test_refit_ratio_severity_scales(db, refit, severity):
+    _invoice(db, system="vessel_acquisition", cents=1500000)
+    _invoice(db, system="professional_install", cents=refit)
+    findings = refit_against_hull_value(db)
+    if refit / 1500000 < 0.5:
+        assert findings == []
+    else:
+        assert findings[0]["severity"] == severity
+
+
+def test_no_ratio_finding_without_a_recorded_purchase_price(db):
+    """With no hull value there is nothing to measure against, and inventing a
+    denominator would be worse than staying silent."""
+    _invoice(db, system="professional_install", cents=1957641)
+    assert refit_against_hull_value(db) == []
