@@ -4,8 +4,8 @@
     {
       "name": "opheliaskey-dashboard",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "uvicorn", "opheliaskey.web.app:app", "--port", "8317", "--app-dir", "src"],
-      "port": 8317
+      "runtimeArgs": ["-m", "uvicorn", "opheliaskey.web.app:app", "--port", "8318", "--app-dir", "src"],
+      "port": 8318
     }
   ]
 }

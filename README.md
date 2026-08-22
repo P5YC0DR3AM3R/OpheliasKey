@@ -151,6 +151,27 @@ Two independent questions, answered in three passes.
    low-confidence. Manual verdicts are final — neither rules nor the LLM will
    overwrite them.
 
+The fastest way to clear it is the browser UI — `okey serve`, then
+**http://127.0.0.1:8000/review**. One item at a time, entirely keyboard-driven:
+
+| Key | Action |
+|---|---|
+| <kbd>B</kbd> | Mark boat, with the selected system |
+| <kbd>P</kbd> | Mark personal |
+| <kbd>S</kbd> | Focus the system picker |
+| <kbd>O</kbd> | Apply the next decision to every unresolved item in the same order |
+| <kbd>J</kbd> / <kbd>K</kbd> | Skip forward / back |
+| <kbd>Z</kbd> | Undo |
+
+Each item shows quantity, unit and line price, vendor, order date, and the
+LLM's call with its reasoning. The system picker pre-selects whatever the
+classifier suggested, so a correct guess is one keystroke to confirm. Undo
+restores the *exact* prior state — including which pass made the original call
+— so an undone decision does not leave a `manual` marker behind that would
+freeze the item against re-classification.
+
+The CLI equivalent, for scripting:
+
 ```bash
 okey review                                              # see the queue
 okey review --item 5 --mark boat --system solar_generation
@@ -251,3 +272,7 @@ assumptions do: a number you cannot see is a number you cannot argue with.
 `data/`, `.env` and `secrets/` are gitignored. The database holds personal
 purchase history and never leaves the machine; the dashboard binds to
 `127.0.0.1` by default.
+
+The review endpoints mutate the ledger, and any page open in your browser can
+POST to localhost — so they reject cross-origin and cross-site requests rather
+than relying on the bind address alone.

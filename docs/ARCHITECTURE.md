@@ -101,6 +101,29 @@ distinguishes "fails under every estimate" from "fails under the pessimistic
 one" — collapsing those would either overstate certainty or hide a real risk
 behind a favourable assumption.
 
+## The review UI
+
+The queue is the gate every downstream figure depends on, so clearing it has to
+be fast. `/review` is one item at a time, keyboard-driven, served from the same
+FastAPI app with no build step.
+
+Three decisions worth recording:
+
+**Undo restores a full snapshot, not just the value.** `POST /api/review/decide`
+returns the prior state of every row it touched, and `restore` writes it back
+verbatim — including `relevance_by` and `classified_by`. Restoring only the
+value would leave a `manual` marker on an item nobody decided, permanently
+freezing it against the rules and LLM passes.
+
+**Whole-order decisions touch only unresolved siblings.** An Amazon order is
+usually entirely boat or entirely personal, so `apply_to_order` handles the
+common case in one keystroke — but it skips any sibling already decided by
+hand, so a bulk call can never overwrite an individual judgement.
+
+**Mutating endpoints reject cross-site requests.** The server binds to
+localhost, but any page open in the browser can POST there, and these endpoints
+write to the ledger. Origin and `Sec-Fetch-Site` are both checked.
+
 ## Known limitations
 
 - **Amazon Business API access is gated** and may not be granted. The CSV export

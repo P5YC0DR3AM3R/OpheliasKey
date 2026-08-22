@@ -596,3 +596,150 @@ def test_reward_lenses_are_not_summed(db):
     report = reward_report(db)
     assert set(report) >= {"recovery", "labor", "capability", "use_value"}
     assert not any("total_return" in k or "combined" in k for k in report)
+
+
+# --- review UI endpoints ----------------------------------------------------
+
+@pytest.fixture
+def client(db, monkeypatch):
+    """TestClient wired to the temp database.
+
+    Builds a fresh connection per call rather than sharing the fixture's,
+    mirroring production: the server handles each request on a worker thread
+    and SQLite connections cannot cross threads.
+    """
+    from fastapi.testclient import TestClient
+
+    from opheliaskey.db.database import Database
+    from opheliaskey.web import app as web
+
+    def per_request():
+        conn = Database(db.path)
+        conn.migrate()
+        return conn
+
+    monkeypatch.setattr(web, "_db", per_request)
+    return TestClient(web.app)
+
+
+def _queued_item(db, description="Mystery bracket", cents=12345, system_key=None,
+                 order_items=1):
+    cur = db.execute(
+        "INSERT INTO orders (source, external_order_id, status, total_cents, ordered_at, "
+        "created_at, updated_at) VALUES ('test',?,'delivered',?, '2026-05-01T00:00:00Z',?,?)",
+        (f"rv{db.one('SELECT COUNT(*) c FROM orders')['c']}", cents, utcnow(), utcnow()))
+    order_id = int(cur.lastrowid)
+    sys_id = None
+    if system_key:
+        sys_id = db.one("SELECT id FROM boat_systems WHERE key=?", (system_key,))["id"]
+    ids = []
+    for n in range(order_items):
+        c = db.execute(
+            "INSERT INTO line_items (order_id, line_no, description, quantity, total_cents, "
+            "system_id) VALUES (?,?,?,1,?,?)",
+            (order_id, n, f"{description} {n}" if order_items > 1 else description,
+             cents // order_items, sys_id))
+        ids.append(int(c.lastrowid))
+    return order_id, ids
+
+
+def test_review_queue_lists_undecided_items(client, db):
+    _queued_item(db)
+    data = client.get("/api/review/queue").json()
+    assert data["remaining"] == 1
+    assert data["items"][0]["description"] == "Mystery bracket"
+
+
+def test_decide_marks_manual_and_clears_from_queue(client, db):
+    _, ids = _queued_item(db)
+    res = client.post("/api/review/decide", json={
+        "item_id": ids[0], "relevance": "boat", "system_key": "deck_hardware"})
+    assert res.status_code == 200
+    assert res.json()["remaining"] == 0
+
+    row = db.one("SELECT relevance, relevance_by, classified_by FROM line_items WHERE id=?",
+                 (ids[0],))
+    assert row["relevance"] == "boat"
+    assert row["relevance_by"] == "manual"
+    assert row["classified_by"] == "manual"
+
+
+def test_boat_without_a_system_stays_in_the_queue(client, db):
+    """Relevance alone does not finish the job — the item still needs a system,
+    and the queue must keep surfacing it until it has one."""
+    _, ids = _queued_item(db)
+    res = client.post("/api/review/decide", json={"item_id": ids[0], "relevance": "boat"})
+    assert res.json()["remaining"] == 1
+
+
+def test_personal_needs_no_system(client, db):
+    _, ids = _queued_item(db)
+    assert client.post("/api/review/decide",
+                       json={"item_id": ids[0], "relevance": "personal"}).json()["remaining"] == 0
+
+
+def test_undo_restores_the_exact_prior_state(client, db):
+    """Restoring only the value would leave a spurious 'manual' marker and
+    freeze the item against future re-classification."""
+    _, ids = _queued_item(db, system_key="deck_hardware")
+    db.execute("UPDATE line_items SET classified_by='rule', classify_conf=0.8 WHERE id=?",
+               (ids[0],))
+
+    previous = client.post("/api/review/decide", json={
+        "item_id": ids[0], "relevance": "boat", "system_key": "interior"}).json()["previous"]
+    client.post("/api/review/restore", json=previous)
+
+    row = db.one("""SELECT relevance, relevance_by, system_id, classified_by, classify_conf
+                    FROM line_items WHERE id=?""", (ids[0],))
+    assert row["relevance"] is None
+    assert row["relevance_by"] is None
+    assert row["classified_by"] == "rule"       # not left as 'manual'
+    assert row["classify_conf"] == 0.8
+    assert row["system_id"] == db.one(
+        "SELECT id FROM boat_systems WHERE key='deck_hardware'")["id"]
+
+
+def test_apply_to_order_touches_only_unresolved_siblings(client, db):
+    """A sibling already decided by hand must not be swept up by a bulk call."""
+    _, ids = _queued_item(db, cents=30000, order_items=3)
+    db.execute("UPDATE line_items SET relevance='personal', relevance_by='manual' WHERE id=?",
+               (ids[2],))
+
+    res = client.post("/api/review/decide", json={
+        "item_id": ids[0], "relevance": "boat", "system_key": "interior",
+        "apply_to_order": True}).json()
+    assert res["count"] == 2                     # the third was already resolved
+
+    untouched = db.one("SELECT relevance FROM line_items WHERE id=?", (ids[2],))
+    assert untouched["relevance"] == "personal"
+
+
+def test_decide_rejects_bad_input(client, db):
+    _, ids = _queued_item(db)
+    assert client.post("/api/review/decide",
+                       json={"item_id": ids[0], "relevance": "maybe"}).status_code == 400
+    assert client.post("/api/review/decide",
+                       json={"item_id": ids[0], "relevance": "boat",
+                             "system_key": "nonexistent"}).status_code == 400
+    assert client.post("/api/review/decide",
+                       json={"item_id": 999999, "relevance": "boat"}).status_code == 404
+
+
+def test_mutating_endpoints_reject_cross_site_requests(client, db):
+    """The dashboard binds to localhost, but any page in the browser can POST
+    there. These endpoints mutate the ledger."""
+    _, ids = _queued_item(db)
+    body = {"item_id": ids[0], "relevance": "boat"}
+    assert client.post("/api/review/decide", json=body,
+                       headers={"Origin": "https://evil.example"}).status_code == 403
+    assert client.post("/api/review/decide", json=body,
+                       headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    # Same-origin still works.
+    assert client.post("/api/review/decide", json=body,
+                       headers={"Sec-Fetch-Site": "same-origin"}).status_code == 200
+
+
+def test_review_page_renders_with_an_empty_queue(client, db):
+    res = client.get("/review")
+    assert res.status_code == 200
+    assert client.get("/api/review/queue").json()["remaining"] == 0
