@@ -688,11 +688,17 @@ def report_commitments():
         console.print("[green]Nothing committed and unbilled.[/]")
         return
 
-    header = (
-        f"Committed items      {summary['count']}\n"
-        f"Estimated            {fmt_money(summary['estimated_cents'])}"
-    )
-    if summary["unpriced_count"]:
+    header = f"Committed items      {summary['count']}"
+    if summary["priced_count"]:
+        header += (
+            f"\nEstimated            {fmt_money(summary['estimated_cents'])}"
+            f"  [dim](from {summary['priced_count']} of {summary['count']} items)[/]"
+        )
+    if summary["unpriced_count"] == summary["count"]:
+        header += (
+            f"\n[yellow]Estimated            unknown — none of these are quoted yet[/]"
+        )
+    elif summary["unpriced_count"]:
         header += (
             f"\n[yellow]Without an estimate  {summary['unpriced_count']} — "
             f"the real figure is higher[/]"

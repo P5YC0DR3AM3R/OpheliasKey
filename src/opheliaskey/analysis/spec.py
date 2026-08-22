@@ -203,6 +203,17 @@ def check_battery_runtime(s: dict) -> list[SpecFinding]:
     )]
 
 
+def solar_install_pending(db) -> bool:
+    """True when the array is owned but its installation is still committed."""
+    if db is None:
+        return False
+    row = db.one(
+        """SELECT COUNT(*) AS n FROM commitments
+           WHERE status='open' AND (description LIKE '%solar%' OR reference LIKE '%SOLAR%')"""
+    )
+    return bool(row and row["n"])
+
+
 def check_solar_realistic_harvest(s: dict) -> list[SpecFinding]:
     """Nameplate versus what flexible panels actually deliver — and whether
     that covers the load they were presumably bought to cover."""
@@ -232,7 +243,22 @@ def check_solar_realistic_harvest(s: dict) -> list[SpecFinding]:
     psh = _a("peak_sun_hours")
     low_kwh, high_kwh = low_w * psh / 1000, high_w * psh / 1000
 
-    findings = [SpecFinding(
+    findings = []
+    if s.get("_solar_pending"):
+        usable_kwh = s["bank_kwh"] * _a("usable_depth_lifepo4")
+        findings.append(SpecFinding(
+            "high", "solar_not_yet_in_service",
+            "Solar is purchased but not installed — no generation today",
+            (f"The {nameplate:.0f}W nameplate array is owned and the installation is "
+             f"committed to AVC Marine, but until it is fitted the {usable_kwh:.1f} kWh "
+             f"bank is refilled only by the generator or shore power. Every harvest "
+             f"figure below describes the system once installed, not the boat as it "
+             f"stands."),
+            {"array": "purchased, install pending", "usable bank": f"{usable_kwh:.1f} kWh"},
+            ("usable_depth_lifepo4",),
+        ))
+
+    findings.append(SpecFinding(
         "medium", "solar_nameplate_gap",
         "Solar array will not deliver its nameplate rating",
         (f"{s['solar_panel_count']:.0f} panels marketed at "
@@ -245,7 +271,7 @@ def check_solar_realistic_harvest(s: dict) -> list[SpecFinding]:
         {"nameplate": f"{nameplate:.0f}W", "realistic": f"{low_w:.0f}-{high_w:.0f}W",
          "daily": f"{low_kwh:.1f}-{high_kwh:.1f} kWh"},
         ("flexible_panel_derate_low", "flexible_panel_derate_high", "peak_sun_hours"),
-    )]
+    ))
 
     if ac_kwh > high_kwh:
         findings.append(SpecFinding(
@@ -368,6 +394,7 @@ SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 def spec_report(db: Database | None = None) -> dict:
     """Run every spec check. Returns findings sorted most severe first."""
     spec = load_spec(db)
+    spec["_solar_pending"] = solar_install_pending(db)
     findings: list[SpecFinding] = []
     for check in CHECKS:
         findings.extend(check(spec))
