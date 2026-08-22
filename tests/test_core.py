@@ -1232,3 +1232,24 @@ def test_priceless_items_are_reported(db):
     findings = priceless_line_items(db)
     assert len(findings) == 1
     assert "1 line item has no recorded price" in findings[0]["title"]
+
+
+def test_parser_preserves_document_provenance(db):
+    """Both the Business API and the data export feed the Amazon parser.
+    Hardcoding one source makes it impossible to tell where an order came
+    from."""
+    import json
+
+    from opheliaskey.parsing.registry import parse_pending
+
+    payload = json.dumps({
+        "orderId": "111-0000000-0000001", "orderDate": "2026-08-01T00:00:00Z",
+        "orderStatus": "closed", "totalAmount": 25.02,
+        "lineItems": [{"productTitle": "Widget", "quantity": 1,
+                       "unitPrice": "11.69", "totalPrice": "25.02"}],
+    }).encode()
+    db.store_raw("amazon_csv", "111-0000000-0000001", payload)
+    parse_pending(db)
+
+    row = db.one("SELECT source FROM orders WHERE external_order_id='111-0000000-0000001'")
+    assert row["source"] == "amazon_csv"

@@ -371,17 +371,26 @@ def ingest_amazon(full: bool = typer.Option(False, help="Re-scan from the projec
 @ingest_app.command("amazon-csv")
 def ingest_amazon_csv(
     directory: str = typer.Option("", "--dir", help="Folder holding the Amazon export."),
+    since: str = typer.Option("", "--since", help="Only orders on/after YYYY-MM-DD."),
 ):
     """Import the Amazon 'Request My Data' order-history export.
 
     This path needs no API approval. Unzip the export anywhere under the
     configured folder and point this at it.
     """
-    from .sources.amazon_csv import AmazonCsvSource
+    from .sources.amazon_csv import AmazonCsvSource, import_refunds
 
     db = _db()
-    source = AmazonCsvSource(directory or None)
+    source = AmazonCsvSource(directory or None, since=since or None)
     result = source.sync(db)
+    refunds = import_refunds(db, source.directory)
+    if refunds["read"]:
+        console.print(
+            f"[green]refunds: {refunds['linked']} linked "
+            f"({fmt_money(refunds['amount_cents'])})[/]"
+            + (f", {refunds['unmatched']} for orders outside this export"
+               if refunds["unmatched"] else "")
+        )
     if result.errors:
         for err in result.errors:
             console.print(f"[red]{err}[/]")
