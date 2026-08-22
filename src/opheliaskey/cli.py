@@ -616,6 +616,41 @@ def report_risk():
             console.print(f"  [{palette[finding['severity']]}]●[/] {finding['title']}")
 
 
+@report_app.command("duplicates")
+def report_duplicates(window: int = typer.Option(7, help="Days between orders.")):
+    """Identical orders close together — possible double charges."""
+    from .analysis.risk import duplicate_orders
+
+    db = _db()
+    if not duplicate_orders(db, window_days=window):
+        console.print("[green]No duplicate-looking orders.[/]")
+        return
+    rows = db.query(
+        """SELECT a.external_order_id fid, b.external_order_id sid, a.total_cents amt,
+                  a.ordered_at fat, b.ordered_at sat, v.canonical_name vendor
+           FROM orders a
+           JOIN orders b ON b.vendor_id=a.vendor_id AND b.total_cents=a.total_cents
+                        AND b.id > a.id
+                        AND julianday(b.ordered_at) - julianday(a.ordered_at) <= ?
+           LEFT JOIN vendors v ON v.id=a.vendor_id
+           WHERE a.status!='cancelled' AND b.status!='cancelled' AND a.total_cents > 0
+           ORDER BY a.total_cents DESC""", (window,))
+    table = Table("amount", "vendor", "first order", "second order", "gap")
+    for r in rows:
+        gap = ""
+        if r["fat"] and r["sat"]:
+            from datetime import datetime
+            d1 = datetime.fromisoformat(r["fat"].replace("Z", ""))
+            d2 = datetime.fromisoformat(r["sat"].replace("Z", ""))
+            gap = f"{(d2 - d1).days}d"
+        table.add_row(fmt_money(r["amt"]), r["vendor"] or "—",
+                      f'{r["fid"]}\n{(r["fat"] or "")[:10]}',
+                      f'{r["sid"]}\n{(r["sat"] or "")[:10]}', gap)
+    console.print(table)
+    console.print("[dim]Check your card statement; mark false positives with "
+                  "`okey review --item <id> --mark personal` or leave them.[/]")
+
+
 @report_app.command("priceless")
 def report_priceless():
     """Line items that exist but carry no price."""

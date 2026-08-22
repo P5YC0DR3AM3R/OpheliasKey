@@ -321,6 +321,45 @@ def priceless_line_items(db: Database) -> list[dict]:
     ]
 
 
+def duplicate_orders(db: Database, window_days: int = 7) -> list[dict]:
+    """Same vendor, same amount, close together — a possible double charge.
+
+    Repeated payment failures produce re-orders of an identical basket, and the
+    cancelled attempt is not always emailed. Two identical amounts days apart
+    are either a genuine repeat purchase or money counted twice, and only the
+    owner can tell which."""
+    rows = db.query(
+        """SELECT a.external_order_id AS first_id, b.external_order_id AS second_id,
+                  a.total_cents, a.ordered_at AS first_at, b.ordered_at AS second_at,
+                  v.canonical_name AS vendor
+           FROM orders a
+           JOIN orders b ON b.vendor_id = a.vendor_id
+                        AND b.total_cents = a.total_cents
+                        AND b.id > a.id
+                        AND julianday(b.ordered_at) - julianday(a.ordered_at) <= ?
+           LEFT JOIN vendors v ON v.id = a.vendor_id
+           WHERE a.status != 'cancelled' AND b.status != 'cancelled'
+             AND a.total_cents > 0
+           ORDER BY a.total_cents DESC""",
+        (window_days,),
+    )
+    if not rows:
+        return []
+    exposure = sum(int(r["total_cents"]) for r in rows)
+    return [
+        _finding(
+            "medium",
+            "possible_duplicate_order",
+            f"{len(rows)} pair{'s' if len(rows) != 1 else ''} of identical orders "
+            f"within {window_days} days",
+            "Same vendor, same amount, days apart. Either a genuine repeat purchase or "
+            "the same basket counted twice after a payment failure. List them with "
+            "`okey report duplicates`.",
+            exposure,
+        )
+    ]
+
+
 def risk_report(db: Database) -> dict:
     findings = (
         budget_overruns(db)
@@ -334,6 +373,7 @@ def risk_report(db: Database) -> dict:
         + unpriced_invoices(db)
         + refit_against_hull_value(db)
         + priceless_line_items(db)
+        + duplicate_orders(db)
     )
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 9), -(f["amount_cents"] or 0)))
 
