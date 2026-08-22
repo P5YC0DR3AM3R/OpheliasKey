@@ -25,6 +25,7 @@ KNOWN_VENDORS: dict[str, tuple[str, str]] = {
     "harborfreight.com": ("Harbor Freight", "hardware"),
     "mcmaster.com": ("McMaster-Carr", "hardware"),
     "grainger.com": ("Grainger", "hardware"),
+    "signsbytomorrow.com": ("Signs By Tomorrow", "service"),
 }
 
 _NOISE = re.compile(
@@ -50,6 +51,7 @@ MERCHANT_PATTERNS: list[tuple[str, str]] = [
     (r"harbor\s*freight", "harborfreight.com"),
     (r"mcmaster", "mcmaster.com"),
     (r"grainger", "grainger.com"),
+    (r"signs\s*by\s*tomorrow", "signsbytomorrow.com"),
 ]
 _COMPILED_MERCHANTS = [(re.compile(p, re.I), domain) for p, domain in MERCHANT_PATTERNS]
 

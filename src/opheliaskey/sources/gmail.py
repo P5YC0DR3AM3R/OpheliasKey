@@ -18,27 +18,43 @@ from .base import SyncResult
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-# Gmail's own classifier is a good prefilter, but it misses plenty, so we OR it
-# together with explicit vendor domains and receipt-shaped subject lines.
-DEFAULT_QUERY = " OR ".join(
-    [
-        "category:purchases",
-        "from:amazon.com",
-        "from:defender.com",
-        "from:westmarine.com",
-        "from:fisheriessupply.com",
-        "from:jamestowndistributors.com",
-        "from:homedepot.com",
-        "from:lowes.com",
-        "from:harborfreight.com",
-        'subject:"order confirmation"',
-        'subject:"your order"',
-        'subject:"order #"',
-        'subject:"invoice"',
-        'subject:"receipt"',
-        'subject:"has shipped"',
-        'subject:"proof of purchase"',
-    ]
+# Query design, corrected against the real mailbox:
+#
+#   * Bare vendor domains (from:lowes.com, from:harborfreight.com) return almost
+#     nothing but marketing. Matching on them floods the raw store with
+#     newsletters, so transactional sender addresses are listed explicitly and
+#     everything else must look like a receipt.
+#   * `-category:promotions` removes the remaining marketing bulk. A small number
+#     of genuine receipts land in Promotions and will be missed; that trade is
+#     worth it, and `OKEY_GMAIL_QUERY` overrides this wholesale if needed.
+TRANSACTIONAL_SENDERS = [
+    "auto-confirm@amazon.com",
+    "order-update@amazon.com",
+    "shipment-tracking@amazon.com",
+    "return@amazon.com",
+    "digital-no-reply@amazon.com",
+    "service@paypal.com",
+    "googleplay-noreply@google.com",
+]
+
+RECEIPT_SUBJECTS = [
+    '"order confirmation"',
+    '"your order"',
+    '"order #"',
+    '"order receipt"',
+    '"has shipped"',
+    '"proof of purchase"',
+    '"work order"',
+    "invoice",
+    "receipt",
+]
+
+DEFAULT_QUERY = (
+    "("
+    "category:purchases"
+    + "".join(f" OR from:{sender}" for sender in TRANSACTIONAL_SENDERS)
+    + " OR subject:(" + " OR ".join(RECEIPT_SUBJECTS) + ")"
+    + ") -category:promotions"
 )
 
 
@@ -79,7 +95,7 @@ class GmailSource:
     name = "gmail"
 
     def __init__(self, query: str | None = None):
-        self.query = query or DEFAULT_QUERY
+        self.query = query or get_settings().gmail_query or DEFAULT_QUERY
         self._service = None
 
     @property

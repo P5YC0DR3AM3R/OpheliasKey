@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     gmail_client_secret_file: Path = PROJECT_ROOT / "secrets" / "gmail_client_secret.json"
     gmail_token_file: Path = PROJECT_ROOT / "secrets" / "gmail_token.json"
     gmail_since: str = "2024-01-01"
+    gmail_query: str = ""  # blank => use the built-in default query
 
     # Amazon Business (Login with Amazon)
     amazon_client_id: str = ""
