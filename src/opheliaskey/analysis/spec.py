@@ -207,11 +207,30 @@ def check_solar_realistic_harvest(s: dict) -> list[SpecFinding]:
     """Nameplate versus what flexible panels actually deliver — and whether
     that covers the load they were presumably bought to cover."""
     nameplate = s["solar_panel_count"] * s["solar_panel_watts_nameplate"]
+    ac_kwh = s["ac_load_watts"] * s["ac_hours_per_day"] / 1000 / _a("inverter_efficiency")
+
+    if nameplate <= 0:
+        # No array in service. The nameplate/derate discussion is meaningless,
+        # but the absence of any charging source is itself the finding.
+        usable_kwh = s["bank_kwh"] * _a("usable_depth_lifepo4")
+        return [SpecFinding(
+            "high", "no_charging_source",
+            "No solar in service — the bank has no renewable charging source",
+            (f"With no array, the {usable_kwh:.1f} kWh usable bank is refilled only by the "
+             f"generator or shore power. At anchor the generator becomes a required system "
+             f"rather than a backup, and its runtime is set by consumption: roughly "
+             f"{usable_kwh / max(ac_kwh, 0.001):.1f} days of the assumed air-conditioning "
+             f"duty cycle, or longer at house loads only. Any single-point generator failure "
+             f"ends off-grid capability entirely."),
+            {"array": "not in service", "usable bank": f"{usable_kwh:.1f} kWh",
+             "AC daily draw": f"{ac_kwh:.1f} kWh"},
+            ("usable_depth_lifepo4", "inverter_efficiency"),
+        )]
+
     low_w = nameplate * _a("flexible_panel_derate_low")
     high_w = nameplate * _a("flexible_panel_derate_high")
     psh = _a("peak_sun_hours")
     low_kwh, high_kwh = low_w * psh / 1000, high_w * psh / 1000
-    ac_kwh = s["ac_load_watts"] * s["ac_hours_per_day"] / 1000 / _a("inverter_efficiency")
 
     findings = [SpecFinding(
         "medium", "solar_nameplate_gap",
@@ -248,6 +267,8 @@ def check_solar_realistic_harvest(s: dict) -> list[SpecFinding]:
 def check_mppt_ceiling(s: dict) -> list[SpecFinding]:
     """Does the controller cap the array?"""
     nameplate = s["solar_panel_count"] * s["solar_panel_watts_nameplate"]
+    if nameplate <= 0:
+        return []          # no array to cap
     ceiling = s["mppt_amps"] * s["bank_nominal_voltage"]
     if ceiling >= nameplate:
         return []
@@ -273,6 +294,8 @@ def check_mppt_ceiling(s: dict) -> list[SpecFinding]:
 def check_string_voltage(s: dict) -> list[SpecFinding]:
     """The MPPT has a lower input window. A hot string that sags below it stops
     harvesting entirely — a silent failure, not a degraded one."""
+    if s["solar_panel_count"] <= 0:
+        return []          # no strings to verify
     series = s["solar_series_per_string"]
     return [SpecFinding(
         "medium", "string_voltage_unverified",

@@ -247,6 +247,53 @@ def systems():
     console.print(table)
 
 
+@app.command("amazon")
+def amazon_setup():
+    """How to connect Amazon, and what is configured now."""
+    settings = get_settings()
+    table = Table("path", "status", "detail")
+
+    if settings.amazon_configured:
+        table.add_row("Business API", "[green]configured[/]", "LWA credentials present")
+    else:
+        table.add_row("Business API", "[yellow]not configured[/]",
+                      "needs developer-program approval")
+
+    csv_dir = Path(settings.amazon_csv_dir)
+    found = sorted(csv_dir.rglob("*.csv")) if csv_dir.exists() else []
+    if found:
+        table.add_row("Data export", "[green]found[/]",
+                      f"{len(found)} CSV file(s) in {csv_dir}")
+    else:
+        table.add_row("Data export", "[yellow]no files[/]", str(csv_dir))
+    console.print(table)
+
+    console.print(
+        Panel(
+            "[bold]Fastest path — works today, no approval needed[/]\n"
+            "1. Go to [cyan]amazon.com/hz/privacy-central/data-requests/preview.html[/]\n"
+            "2. Request [cyan]Your Orders[/] and confirm by email.\n"
+            "3. Amazon emails a download link in a few hours to a few days.\n"
+            f"4. Unzip it into [cyan]{csv_dir}[/]\n"
+            "5. Run [cyan]okey ingest amazon-csv[/] then [cyan]okey parse[/]\n\n"
+            "[dim]Look for Retail.OrderHistory.1.csv — one row per item, every "
+            "order, ASIN, unit price, quantity, tax and status.[/]\n\n"
+            "[bold]Ongoing sync — needs approval[/]\n"
+            "Your account is already Amazon Business (orders read 'On behalf of\n"
+            "Micah Read MGMT', and you hold B2B protection plans), so you can apply:\n"
+            "1. Amazon Business → Business Settings → System Integrations.\n"
+            "2. Register a developer application; note the LWA client id and secret.\n"
+            "3. Authorize it to get a refresh token.\n"
+            "4. Put all three in [cyan].env[/] as OKEY_AMAZON_CLIENT_ID / "
+            "_CLIENT_SECRET / _REFRESH_TOKEN\n"
+            "5. Run [cyan]okey ingest amazon --full[/]\n\n"
+            "[dim]Approval is not guaranteed and can take weeks. Both paths feed the\n"
+            "same parser, so nothing is wasted by starting with the export.[/]",
+            title="Connecting Amazon", border_style="yellow",
+        )
+    )
+
+
 @app.command()
 def init():
     """Create the database and seed the boat-system taxonomy."""
@@ -319,6 +366,29 @@ def ingest_amazon(full: bool = typer.Option(False, help="Re-scan from the projec
     db = _db()
     result = AmazonBusinessSource().sync(db, full=full)
     console.print(f"[green]{result.summary()}[/]")
+
+
+@ingest_app.command("amazon-csv")
+def ingest_amazon_csv(
+    directory: str = typer.Option("", "--dir", help="Folder holding the Amazon export."),
+):
+    """Import the Amazon 'Request My Data' order-history export.
+
+    This path needs no API approval. Unzip the export anywhere under the
+    configured folder and point this at it.
+    """
+    from .sources.amazon_csv import AmazonCsvSource
+
+    db = _db()
+    source = AmazonCsvSource(directory or None)
+    result = source.sync(db)
+    if result.errors:
+        for err in result.errors:
+            console.print(f"[red]{err}[/]")
+        if not result.fetched:
+            raise typer.Exit(1)
+    console.print(f"[green]{result.summary()}[/]")
+    console.print("[dim]Now run: okey parse && okey classify[/]")
 
 
 @ingest_app.command("plaid")
@@ -544,6 +614,34 @@ def report_risk():
         )
         for finding in report["spec_findings"][:3]:
             console.print(f"  [{palette[finding['severity']]}]●[/] {finding['title']}")
+
+
+@report_app.command("priceless")
+def report_priceless():
+    """Line items that exist but carry no price."""
+    db = _db()
+    rows = db.query(
+        """SELECT li.id, li.description, li.quantity, li.asin, v.canonical_name AS vendor,
+                  o.ordered_at, o.external_order_id
+           FROM line_items li
+           JOIN orders o ON o.id = li.order_id
+           LEFT JOIN vendors v ON v.id = o.vendor_id
+           WHERE li.relevance='boat' AND o.status != 'cancelled'
+             AND li.unit_price_cents IS NULL AND COALESCE(li.total_cents,0) = 0
+           ORDER BY o.ordered_at DESC"""
+    )
+    if not rows:
+        console.print("[green]Every line item has a price.[/]")
+        return
+    console.print(
+        f"[yellow]{len(rows)} item(s) counting as zero in every total.[/]\n"
+    )
+    table = Table("id", "date", "item", "qty", "asin", "order")
+    for row in rows:
+        table.add_row(str(row["id"]), (row["ordered_at"] or "—")[:10],
+                      row["description"][:44], f"{row['quantity']:g}",
+                      row["asin"] or "—", row["external_order_id"][:20])
+    console.print(table)
 
 
 @report_app.command("unpriced")

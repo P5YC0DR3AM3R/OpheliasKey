@@ -293,6 +293,34 @@ def refit_against_hull_value(db: Database) -> list[dict]:
     ]
 
 
+def priceless_line_items(db: Database) -> list[dict]:
+    """Line items that exist but carry no price.
+
+    Amazon's export writes 'Not Available' where a figure is missing, and some
+    order emails list an item with no amount. Those land as zero, which is
+    indistinguishable from free unless it is called out — a NULL unit price
+    beside a zero total is the signature."""
+    row = db.one(
+        """SELECT COUNT(*) AS n FROM line_items li
+           JOIN orders o ON o.id = li.order_id
+           WHERE li.relevance = 'boat' AND o.status != 'cancelled'
+             AND li.unit_price_cents IS NULL AND COALESCE(li.total_cents, 0) = 0"""
+    )
+    count = int(row["n"]) if row else 0
+    if not count:
+        return []
+    return [
+        _finding(
+            "medium",
+            "priceless_line_item",
+            f"{count} line item{'s have' if count != 1 else ' has'} no recorded price",
+            "The item is known but its cost is not, so it counts as zero in every "
+            "total. List them with `okey report priceless` and price them by hand.",
+            None,
+        )
+    ]
+
+
 def risk_report(db: Database) -> dict:
     findings = (
         budget_overruns(db)
@@ -305,6 +333,7 @@ def risk_report(db: Database) -> dict:
         + unreviewed_spend(db)
         + unpriced_invoices(db)
         + refit_against_hull_value(db)
+        + priceless_line_items(db)
     )
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 9), -(f["amount_cents"] or 0)))
 

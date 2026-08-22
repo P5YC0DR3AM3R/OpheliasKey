@@ -84,12 +84,19 @@ one-hour access token. Configure `OKEY_AMAZON_CLIENT_ID`,
 `OKEY_AMAZON_CLIENT_SECRET` and `OKEY_AMAZON_REFRESH_TOKEN`, then
 `okey ingest amazon --full`.
 
-> **Access is gated.** The Amazon Business account must be enrolled in the
-> developer program and the app authorized before this returns any data. A `403`
-> from the Reconciliation API usually means missing enrollment rather than a bad
-> token. If approval does not come through, request **Your Orders** from
-> Amazon's Request My Data portal and ingest the CSV instead — same schema, same
-> reports, no code changes.
+> **Access is gated** and approval is not guaranteed. Use the data export
+> instead — it works today with no approval and feeds the same parser:
+>
+> ```bash
+> okey amazon              # prints the steps
+> okey ingest amazon-csv   # after unzipping the export into data/imports/amazon
+> ```
+>
+> The export is one row per item. Rows sharing an Order ID are grouped back into
+> orders; `Cancelled` is normalized so cancelled orders stay out of every total;
+> and `Not Available` prices are kept NULL rather than read as `0.00`, then
+> reported by `okey report priceless` — an item with no price is unknown, not
+> free.
 
 > Amazon's own documentation disagrees with itself on the host
 > (`na.business-api.amazon.com` vs `api.business.amazon.com`) and on the rate
@@ -110,7 +117,9 @@ connect an institution, then `okey ingest plaid`.
 ```bash
 okey init                  # create database, seed taxonomy
 okey ingest gmail --full   # pull order emails
-okey ingest amazon --full  # pull Amazon Business data
+okey amazon                # how to connect Amazon; shows what is configured
+okey ingest amazon-csv     # import the "Request My Data" order export
+okey ingest amazon --full  # Business API (needs developer approval)
 okey ingest plaid          # pull bank transactions
 okey parse                 # raw documents -> orders + line items
 okey classify              # rules pass: relevance + systems

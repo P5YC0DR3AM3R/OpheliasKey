@@ -1146,3 +1146,89 @@ def test_no_ratio_finding_without_a_recorded_purchase_price(db):
     denominator would be worse than staying silent."""
     _invoice(db, system="professional_install", cents=1957641)
     assert refit_against_hull_value(db) == []
+
+
+# --- Amazon data export -----------------------------------------------------
+
+from opheliaskey.analysis.risk import priceless_line_items  # noqa: E402
+from opheliaskey.sources.amazon_csv import read_orders  # noqa: E402
+
+EXPORT_CSV = '''"Website","Order ID","Order Date","Currency","Unit Price","Unit Price Tax","Shipping Charge","Total Discounts","Total Owed","ASIN","Quantity","Order Status","Product Name"
+"Amazon.com","111-1111111-1111111","2026-08-21T02:04:27Z","USD","154.95","12.75","0.00","0.00","335.40","B08XYZ1234","2","Closed","Widget Alpha"
+"Amazon.com","111-1111111-1111111","2026-08-21T02:04:27Z","USD","49.99","4.12","0.00","0.00","54.11","B09ABC5678","1","Closed","Widget Beta"
+"Amazon.com","222-2222222-2222222","2026-08-18T23:33:02Z","USD","89.99","0.00","0.00","0.00","89.99","B06GHI3456","1","Cancelled","Widget Gamma"
+"Amazon.com","333-3333333-3333333","2026-08-19T20:32:05Z","USD","Not Available","","0.00","0.00","Not Available","B05MNO2345","1","Closed","Widget Delta"
+'''
+
+
+def test_export_rows_are_grouped_back_into_orders(tmp_path):
+    """The export is one row per item; rows sharing an Order ID are one order."""
+    path = tmp_path / "Retail.OrderHistory.1.csv"
+    path.write_text(EXPORT_CSV)
+    orders = {o["orderId"]: o for o in read_orders(path)}
+    assert len(orders) == 3
+    assert len(orders["111-1111111-1111111"]["lineItems"]) == 2
+
+
+def test_cancelled_orders_are_normalized(tmp_path):
+    """Amazon spells it 'Cancelled'; every downstream query filters on
+    'cancelled'. Without normalizing, a cancelled order counts as spend."""
+    path = tmp_path / "Retail.OrderHistory.1.csv"
+    path.write_text(EXPORT_CSV)
+    orders = {o["orderId"]: o for o in read_orders(path)}
+    assert orders["222-2222222-2222222"]["orderStatus"] == "cancelled"
+    assert orders["111-1111111-1111111"]["orderStatus"] == "closed"
+
+
+def test_not_available_prices_do_not_become_zero_silently(tmp_path):
+    """Amazon writes 'Not Available' for a missing figure. Reading that as 0.00
+    understates the total with no signal that anything was lost."""
+    path = tmp_path / "Retail.OrderHistory.1.csv"
+    path.write_text(EXPORT_CSV)
+    orders = {o["orderId"]: o for o in read_orders(path)}
+    item = orders["333-3333333-3333333"]["lineItems"][0]
+    assert item["unitPrice"] is None
+    assert item["totalPrice"] is None
+    # The order has no derivable total at all, rather than a false zero.
+    assert "totalAmount" not in orders["333-3333333-3333333"]
+
+
+def test_column_name_variants_are_tolerated(tmp_path):
+    """Amazon has renamed these columns more than once across exports."""
+    path = tmp_path / "orders.csv"
+    path.write_text(
+        '"OrderID","OrderDate","Title","Quantity","Purchase Price Per Unit","Item Total",'
+        '"ASIN/ISBN","Order Status"\n'
+        '"555-5555555-5555555","2026-07-30","Widget Epsilon","1","$99.00","$99.00",'
+        '"B0123","Shipped"\n')
+    orders = read_orders(path)
+    assert len(orders) == 1
+    assert orders[0]["lineItems"][0]["productTitle"] == "Widget Epsilon"
+    assert orders[0]["lineItems"][0]["unitPrice"] == "$99.00"
+
+
+def test_missing_order_id_column_is_a_clear_error(tmp_path):
+    path = tmp_path / "orders.csv"
+    path.write_text('"Something","Else"\n"a","b"\n')
+    with pytest.raises(ValueError, match="Order ID"):
+        read_orders(path)
+
+
+def test_priceless_items_are_reported(db):
+    """An item with a NULL unit price and a zero total is unknown, not free."""
+    cur = db.execute(
+        """INSERT INTO orders (source, external_order_id, ordered_at, status, total_cents,
+             created_at, updated_at) VALUES ('amazon_csv','o1','2026-08-01T00:00:00Z',
+             'closed',0,?,?)""", (utcnow(), utcnow()))
+    order_id = int(cur.lastrowid)
+    db.execute(
+        "INSERT INTO line_items (order_id, line_no, description, unit_price_cents, "
+        "total_cents, relevance) VALUES (?,0,'unknown price item',NULL,0,'boat')", (order_id,))
+    # A genuinely free line must not be flagged.
+    db.execute(
+        "INSERT INTO line_items (order_id, line_no, description, unit_price_cents, "
+        "total_cents, relevance) VALUES (?,1,'free item',0,0,'boat')", (order_id,))
+
+    findings = priceless_line_items(db)
+    assert len(findings) == 1
+    assert "1 line item has no recorded price" in findings[0]["title"]

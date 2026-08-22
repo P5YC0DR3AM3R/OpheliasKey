@@ -200,6 +200,8 @@ def capability(db: Database) -> dict:
 
     # Days at anchor before an outside source is needed, in both modes.
     def days(load_kwh: float, harvest_kwh: float) -> float | None:
+        """None means the load is covered by harvest, so autonomy is not
+        battery-limited — a different statement from 'zero days'."""
         deficit = load_kwh - harvest_kwh
         return None if deficit <= 0 else usable_kwh / deficit
 
