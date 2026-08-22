@@ -119,6 +119,7 @@ okey review                # clear the human review queue
 okey reconcile             # match orders to bank charges
 okey report cost           # spend by system, vendor, month
 okey report risk           # findings, most severe first
+okey report spec           # engineering risk from the installed specification
 okey report unclassified   # items awaiting attribution
 okey status                # ingestion and processing state
 okey serve                 # local dashboard
@@ -174,6 +175,34 @@ Each system is flagged capital or consumable. See
 | `unclassified` | Boat line items with no system attributed |
 | `unreviewed_relevance` | Items not yet confirmed boat or personal — the total's error bar |
 | `vendor_concentration` | Over half of spend with a single supplier |
+
+## Specification risk
+
+Receipts answer what something cost. They cannot answer whether it will work.
+`okey report spec` compares the vessel's installed specification against what
+the hardware can actually deliver:
+
+| Check | Question it answers |
+|---|---|
+| `bms_headroom` | Can the bank deliver what the inverter will ask of it? |
+| `ac_startup_surge` | Will the air conditioner actually start on inverter power? |
+| `solar_nameplate_gap` | What will the array really produce, versus its rating? |
+| `solar_cannot_sustain_ac` | Can solar carry the primary load, or is the generator load-bearing? |
+| `battery_runtime` | How long does the primary load run on the bank alone? |
+| `mppt_ceiling` | Does the controller cap the array — and does that cap actually bind? |
+| `string_voltage_unverified` | Does the string stay inside the MPPT's input window when hot? |
+| `house_bank_charging_unspecified` | Does the isolated 12V bank have a way to charge? |
+| `generator_leg_capacity` | How much of the generator's rating is usable at 120V? |
+
+**These are estimates from stated specifications, not measurements.** Every
+judgement call lives in one `ASSUMPTIONS` table, is cited by each finding that
+depends on it, and is visible with `okey report spec --assumptions`. Any spec
+value can be corrected without touching code by writing `spec.<key>` into
+`project_meta` — an override that makes a finding disappear is the finding
+working correctly, not being silenced.
+
+A check that finds nothing wrong returns nothing. None of them fabricate
+reassurance.
 
 ## Tests
 

@@ -343,3 +343,114 @@ def test_manual_verdicts_survive_reclassify(db):
     row = db.one("SELECT relevance, relevance_by FROM line_items WHERE order_id=?", (order_id,))
     assert row["relevance"] == "boat"
     assert row["relevance_by"] == "manual"
+
+
+# --- specification risk -----------------------------------------------------
+
+from opheliaskey.analysis.spec import (  # noqa: E402
+    DEFAULT_SPEC,
+    check_ac_startup_surge,
+    check_bms_headroom,
+    check_generator_leg_capacity,
+    check_mppt_ceiling,
+    load_spec,
+    spec_report,
+)
+
+
+def _spec(**overrides) -> dict:
+    s = dict(DEFAULT_SPEC)
+    s.update(overrides)
+    return s
+
+
+def test_series_bank_ceiling_is_one_bms_not_the_sum():
+    """Batteries in series share a current path, so the bank ceiling is a single
+    unit's BMS. Treating it as the sum would double the apparent headroom and
+    hide the finding entirely."""
+    findings = check_bms_headroom(_spec())
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.code == "bms_headroom"
+    assert f.severity == "high"
+    assert "174A" in f.numbers["DC draw"]
+    assert f.numbers["BMS ceiling"] == "200A"
+
+
+def test_bms_check_silent_when_headroom_is_comfortable():
+    """A check that finds nothing wrong must return nothing, not reassurance."""
+    assert check_bms_headroom(_spec(bms_amps_per_unit=400)) == []
+
+
+def test_surge_check_fires_on_the_pessimistic_estimate():
+    """Startup surge spans a wide range. If the upper end exceeds the inverter
+    the risk is real even when the lower end fits, and must not be suppressed
+    by the favourable assumption."""
+    findings = check_ac_startup_surge(_spec())
+    assert len(findings) == 1
+    assert findings[0].severity == "medium"     # low end fits, high end does not
+
+    # A larger compressor fails on every estimate.
+    worse = check_ac_startup_surge(_spec(ac_load_watts=3000))
+    assert worse[0].severity == "high"
+
+    # A small load fits under every estimate — no finding at all.
+    assert check_ac_startup_surge(_spec(ac_load_watts=500)) == []
+
+
+def test_mppt_check_distinguishes_binding_from_moot():
+    """The controller caps below nameplate, but realistic panel output stays
+    under that cap — so it is not the binding constraint and must not be
+    reported as though it were."""
+    findings = check_mppt_ceiling(_spec())
+    assert findings[0].severity == "low"
+    assert "unlikely to bind" in findings[0].detail
+
+    # Panels that actually perform make the controller the real limit.
+    binding = check_mppt_ceiling(_spec(solar_panel_watts_nameplate=1000))
+    assert binding[0].severity == "medium"
+    assert "binding constraint" in binding[0].detail
+
+
+def test_generator_check_silent_when_leg_covers_rating():
+    assert check_generator_leg_capacity(_spec(generator_circuit_amps=70)) == []
+
+
+def test_spec_values_are_overridable_from_project_meta(db):
+    """Every number must be correctable without editing code, or the findings
+    become unfalsifiable."""
+    assert load_spec(db)["bms_amps_per_unit"] == 200
+    db.execute(
+        "INSERT INTO project_meta (key, value, updated_at) VALUES ('spec.bms_amps_per_unit',"
+        "'400', ?)", (utcnow(),))
+    assert load_spec(db)["bms_amps_per_unit"] == 400
+    # ...and the override actually changes the outcome.
+    assert check_bms_headroom(load_spec(db)) == []
+
+
+def test_bad_override_is_ignored_not_fatal(db):
+    db.execute(
+        "INSERT INTO project_meta (key, value, updated_at) VALUES ('spec.bank_kwh',"
+        "'not a number', ?)", (utcnow(),))
+    assert load_spec(db)["bank_kwh"] == DEFAULT_SPEC["bank_kwh"]
+
+
+def test_every_finding_declares_its_assumptions_or_uses_none():
+    """A finding derived from a judgement call must name it, or it cannot be
+    audited or argued with."""
+    report = spec_report()
+    assert report["findings"], "expected findings for this vessel"
+    for finding in report["findings"]:
+        for line in finding["assumptions"]:
+            assert "=" in line and "(" in line, f"unexplained assumption: {line}"
+
+
+def test_spec_findings_stay_separate_from_purchase_findings(db):
+    """Blending them would let an engineering constraint read as overspending."""
+    from opheliaskey.analysis.risk import risk_report
+
+    report = risk_report(db)
+    assert "spec_findings" in report and "findings" in report
+    spec_codes = {f["code"] for f in report["spec_findings"]}
+    purchase_codes = {f["code"] for f in report["findings"]}
+    assert not (spec_codes & purchase_codes)

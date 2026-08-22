@@ -11,6 +11,7 @@ from .analysis.cost import cost_report
 from .analysis.demo import clear_demo, seed_demo
 from .analysis.reconcile import reconcile as run_reconcile
 from .analysis.risk import risk_report
+from .analysis.spec import spec_report
 from .classify.rules import apply_rules
 from .classify.taxonomy import seed_systems, seed_vessel_meta
 from .config import get_settings
@@ -326,6 +327,62 @@ def report_risk():
             finding["detail"],
         )
     console.print(table)
+
+    spec_counts = report["spec_counts"]
+    if any(spec_counts.values()):
+        console.print(
+            f"\n[blue]Specification risk:[/] [red]{spec_counts['high']} high[/] · "
+            f"[yellow]{spec_counts['medium']} medium[/] · {spec_counts['low']} low  "
+            f"[dim]— see `okey report spec`[/]"
+        )
+        for finding in report["spec_findings"][:3]:
+            console.print(f"  [{palette[finding['severity']]}]●[/] {finding['title']}")
+
+
+@report_app.command("spec")
+def report_spec(
+    assumptions: bool = typer.Option(False, "--assumptions", help="Show the assumption table."),
+):
+    """Engineering risk from the installed specification.
+
+    Compares what the vessel has against what it can deliver. These are
+    estimates from stated specs, not measurements — every assumption is listed
+    with `--assumptions` and can be overridden via project_meta.
+    """
+    report = spec_report(_db())
+    counts = report["counts"]
+    console.print(
+        Panel(
+            f"Findings   [red]{counts['high']} high[/] · [yellow]{counts['medium']} medium[/] "
+            f"· {counts['low']} low\n"
+            f"[dim]Estimated from the installed specification, not measured.[/]",
+            title="Ophelia's Key — specification risk",
+            border_style="blue",
+        )
+    )
+
+    palette = {"high": "red", "medium": "yellow", "low": "dim"}
+    for finding in report["findings"]:
+        colour = palette[finding["severity"]]
+        console.print(
+            f"\n[{colour}]● {finding['severity'].upper()}[/]  [bold]{finding['title']}[/]"
+        )
+        if finding["numbers"]:
+            console.print(
+                "   " + "   ".join(f"[dim]{k}[/] {v}" for k, v in finding["numbers"].items())
+            )
+        console.print(f"   {finding['detail']}", highlight=False)
+        if assumptions and finding["assumptions"]:
+            for line in finding["assumptions"]:
+                console.print(f"   [dim]assumes {line}[/]")
+
+    if assumptions:
+        table = Table("assumption", "value", "basis", title="\nAll assumptions")
+        for key, meta in report["assumptions"].items():
+            table.add_row(key, f"{meta['value']:g}", meta["note"])
+        console.print(table)
+    else:
+        console.print("\n[dim]Run with --assumptions to see the numbers behind these.[/]")
 
 
 @report_app.command("unclassified")

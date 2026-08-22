@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from ..db.database import Database
 from .cost import by_system, totals
+from .spec import spec_report
 
 SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
@@ -236,8 +237,16 @@ def risk_report(db: Database) -> dict:
     t = totals(db)
     planned = db.one("SELECT COALESCE(SUM(planned_cents),0) AS p FROM budget_lines")
     planned_total = int(planned["p"]) if planned else 0
+    # Spec findings are kept in their own list rather than merged. They answer
+    # a different question ("will this work") from a different data source (the
+    # installed specification, not receipts), and blending them would let an
+    # engineering constraint read as a spending problem.
+    spec = spec_report(db)
+
     return {
         "findings": findings,
+        "spec_findings": spec["findings"],
+        "spec_counts": spec["counts"],
         "counts": {
             s: sum(1 for f in findings if f["severity"] == s) for s in ("high", "medium", "low")
         },

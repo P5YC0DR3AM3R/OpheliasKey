@@ -51,6 +51,21 @@
   .spark > div { flex:1; background:var(--accent); border-radius:2px 2px 0 0; min-height:2px;
                  opacity:.85; }
   .scroll { overflow-x:auto; }
+  .specgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
+  .speccard { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+              padding:15px; border-left:3px solid var(--line); }
+  .speccard.high { border-left-color:var(--bad); }
+  .speccard.medium { border-left-color:var(--warn); }
+  .spechead { display:flex; align-items:center; gap:9px; margin-bottom:9px;
+              flex-wrap:wrap; }
+  .spechead strong { font-size:14.5px; }
+  .specnums { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:9px; }
+  .specnums span { background:var(--line); border-radius:5px; padding:3px 8px;
+                   font-size:12px; font-variant-numeric:tabular-nums; }
+  .specnums em { color:var(--dim); font-style:normal; margin-right:5px; }
+  .speccard p { margin:0; }
+  details { margin-top:9px; } summary { cursor:pointer; font-size:12.5px; }
+  details ul { margin:7px 0 0; padding-left:18px; font-size:12.5px; }
   .warnv { color:var(--warn); } .dimv { color:var(--dim); }
   .notice { margin-top:14px; padding:12px 15px; border-radius:9px;
             border:1px solid var(--line); background:var(--panel);
@@ -164,6 +179,38 @@
       </tbody>
     </table>
   </div>
+
+  {% if risk.spec_findings %}
+  <h2>Specification risk — {{ risk.spec_counts.high }} high ·
+      {{ risk.spec_counts.medium }} medium · {{ risk.spec_counts.low }} low</h2>
+  <p class="detail" style="margin:-4px 0 12px">
+    What the vessel has, against what it can deliver. Estimated from stated
+    specifications, not measured.
+  </p>
+  <div class="specgrid">
+    {% for f in risk.spec_findings %}
+    <div class="speccard {{ f.severity }}">
+      <div class="spechead">
+        <span class="sev {{ f.severity }}">{{ f.severity }}</span>
+        <strong>{{ f.title }}</strong>
+      </div>
+      {% if f.numbers %}
+      <div class="specnums">
+        {% for k, v in f.numbers.items() %}
+        <span><em>{{ k }}</em>{{ v }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <p class="detail">{{ f.detail }}</p>
+      {% if f.assumptions %}
+      <details><summary class="detail">assumptions</summary>
+        <ul class="detail">{% for a in f.assumptions %}<li>{{ a }}</li>{% endfor %}</ul>
+      </details>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   {% if review_queue %}
   <h2>Review queue — {{ review_total.n }} items, {{ review_total.amt | money }} at stake</h2>

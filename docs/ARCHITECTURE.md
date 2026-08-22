@@ -79,6 +79,28 @@ touches a dollar figure.
 | Planning | `boat_systems`, `budget_lines`, `project_meta` | Seeded / user-entered |
 | Bookkeeping | `sync_state`, `vendors`, `vendor_aliases` | Partly |
 
+## Two kinds of risk
+
+`risk_report` returns two separate lists, deliberately not merged:
+
+- **Purchase risk** comes from receipts — budget overruns, unreconciled
+  charges, refunds that never landed, spend not yet reviewed.
+- **Specification risk** comes from the installed spec — whether the BMS can
+  feed the inverter, whether the array can carry the load.
+
+They answer different questions from different data sources. Blending them
+would let "your compressor may not start" render as a spending problem, and
+would put an engineering constraint in a table with a dollar column where it
+does not belong.
+
+Specification checks follow the same refusal principle as the rest of the
+system: assumptions are declared in one table rather than buried in the
+arithmetic, each finding names the assumptions it rests on, and a check with
+nothing to report returns an empty list rather than a reassuring one. Severity
+distinguishes "fails under every estimate" from "fails under the pessimistic
+one" — collapsing those would either overstate certainty or hide a real risk
+behind a favourable assumption.
+
 ## Known limitations
 
 - **Amazon Business API access is gated** and may not be granted. The CSV export
@@ -92,6 +114,10 @@ touches a dollar figure.
 - **The LLM pass costs money and needs credentials.** It is opt-in
   (`--llm`) rather than part of the default classify run.
 - **Reward analysis is not yet implemented.** See below.
+- **Specification checks are estimates, not measurements.** They flag what to
+  verify; they do not replace a meter. Several explicitly ask for a number that
+  is missing from the spec (panel Vmp/Voc, compressor LRA, inverter surge
+  rating and duration) rather than guessing it.
 
 ## On reward analysis
 
