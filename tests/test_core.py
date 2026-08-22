@@ -454,3 +454,145 @@ def test_spec_findings_stay_separate_from_purchase_findings(db):
     spec_codes = {f["code"] for f in report["spec_findings"]}
     purchase_codes = {f["code"] for f in report["findings"]}
     assert not (spec_codes & purchase_codes)
+
+
+# --- reward -----------------------------------------------------------------
+
+from opheliaskey.analysis.reward import (  # noqa: E402
+    RECOVERY_RATES,
+    REWARD_ASSUMPTIONS,
+    capability,
+    labor_avoided,
+    recovery,
+    reward_report,
+    use_value,
+)
+
+
+def _boat_order(db, system_key, cents):
+    cur = db.execute(
+        "INSERT INTO orders (source, external_order_id, status, total_cents, created_at, "
+        "updated_at) VALUES ('test',?, 'delivered', ?, ?, ?)",
+        (f"r{db.one('SELECT COUNT(*) c FROM orders')['c']}", cents, utcnow(), utcnow()))
+    order_id = int(cur.lastrowid)
+    sys_id = None
+    if system_key:
+        row = db.one("SELECT id FROM boat_systems WHERE key=?", (system_key,))
+        sys_id = row["id"]
+    db.execute(
+        "INSERT INTO line_items (order_id, line_no, description, total_cents, system_id, "
+        "relevance) VALUES (?,0,'item',?,?,'boat')", (order_id, cents, sys_id))
+    return order_id
+
+
+def test_recovery_never_claims_full_value(db):
+    """No system recovers 100%. A reward model that let one would be lying."""
+    assert all(rate < 1.0 for rate, _ in RECOVERY_RATES.values())
+    _boat_order(db, "electronics_nav", 100000)
+    r = recovery(db)
+    assert r["recoverable_cents"] < r["vessel_spend_cents"]
+    assert r["sunk_cents"] > 0
+
+
+def test_consumed_categories_recover_nothing(db):
+    for key in ("consumables", "yard_services", "fees_admin"):
+        assert RECOVERY_RATES[key][0] == 0.0
+    _boat_order(db, "yard_services", 50000)
+    r = recovery(db)
+    assert r["recoverable_cents"] == 0
+    assert r["sunk_cents"] == 50000
+
+
+def test_tools_are_excluded_from_vessel_value(db):
+    """Tools retain value but do not convey with the boat, so they must not
+    inflate what a buyer would pay."""
+    _boat_order(db, "tools", 40000)
+    r = recovery(db)
+    assert r["vessel_spend_cents"] == 0
+    assert r["recoverable_cents"] == 0
+    assert r["tool_spend_cents"] == 40000
+    assert r["tool_residual_cents"] == 20000
+
+
+def test_unattributed_boat_spend_is_reported_not_dropped(db):
+    """Boat spend with no system has no recovery rate. Silently omitting it
+    would understate both the spend base and the sunk figure."""
+    _boat_order(db, None, 13999)
+    r = recovery(db)
+    assert r["unattributed_cents"] == 13999
+    assert r["unattributed_count"] == 1
+
+
+def test_labor_is_recorded_not_estimated(db):
+    """With no hours logged the value is zero. Estimating hours would
+    manufacture return out of nothing."""
+    empty = labor_avoided(db)
+    assert empty["logged"] is False
+    assert empty["value_cents"] == 0
+
+    row = db.one("SELECT id FROM boat_systems WHERE key='energy_storage'")
+    db.execute(
+        "INSERT INTO labor_log (system_id, hours, logged_at) VALUES (?,?,?)",
+        (row["id"], 10, utcnow()))
+    logged = labor_avoided(db)
+    assert logged["logged"] is True
+    assert logged["hours"] == 10
+    assert logged["value_cents"] == 10 * logged["rate_cents"]
+
+
+def test_labor_rate_override_is_honoured(db):
+    db.execute("INSERT INTO labor_log (hours, rate_cents, logged_at) VALUES (5, 5000, ?)",
+               (utcnow(),))
+    assert labor_avoided(db)["value_cents"] == 25000   # 5h x $50, not the default rate
+
+
+def test_use_value_amortizes_sunk_cost_only(db):
+    """Charging the recoverable portion against nights aboard would
+    double-count: it is not consumed by using the boat."""
+    db.execute("INSERT INTO usage_log (nights, logged_at) VALUES (10, ?)", (utcnow(),))
+    result = use_value(db, sunk_cents=100000)
+    assert result["nights"] == 10
+    assert result["cost_per_night_cents"] == 10000
+
+    # A larger total with the same sunk figure must not change cost per night.
+    assert use_value(db, sunk_cents=100000)["cost_per_night_cents"] == 10000
+
+
+def test_use_value_breakeven_and_remaining(db):
+    alt = REWARD_ASSUMPTIONS["alternative_nightly_cost_dollars"][0] * 100
+    sunk = int(alt * 40)
+    db.execute("INSERT INTO usage_log (nights, logged_at) VALUES (15, ?)", (utcnow(),))
+    result = use_value(db, sunk_cents=sunk)
+    assert result["breakeven_nights"] == 40
+    assert result["nights_remaining"] == 25
+
+    db.execute("INSERT INTO usage_log (nights, logged_at) VALUES (30, ?)", (utcnow(),))
+    assert use_value(db, sunk_cents=sunk)["nights_remaining"] == 0
+
+
+def test_use_value_with_no_nights_logged_reports_no_rate(db):
+    result = use_value(db, sunk_cents=100000)
+    assert result["logged"] is False
+    assert result["cost_per_night_cents"] is None
+    assert result["breakeven_nights"] > 0
+
+
+def test_capability_autonomy_bounds_are_ordered(db):
+    """min must be the worse case. These were inverted on first write."""
+    caps = capability(db)
+    assert caps["days_with_ac_min"] <= caps["days_with_ac_max"]
+
+
+def test_capability_reports_none_when_solar_covers_the_load(db):
+    """`None` means autonomy is not battery-limited, which is a different
+    statement from 'zero days' and must not be rendered as a number."""
+    caps = capability(db)
+    assert caps["days_without_ac"] is None
+
+
+def test_reward_lenses_are_not_summed(db):
+    """The report must not present a single combined 'total return' figure —
+    the lenses measure different things and adding them would double-count."""
+    report = reward_report(db)
+    assert set(report) >= {"recovery", "labor", "capability", "use_value"}
+    assert not any("total_return" in k or "combined" in k for k in report)

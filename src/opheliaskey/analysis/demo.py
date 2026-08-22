@@ -158,7 +158,45 @@ def seed_demo(db: Database) -> dict:
                     (row["id"], planned),
                 )
 
-    return {"orders_created": created}
+    usage = seed_demo_usage(db)
+    return {"orders_created": created, "usage": usage}
+
+
+# Labor and nights cannot be inferred from receipts, so the demo seeds a
+# plausible record of both to exercise the reward analysis end to end.
+DEMO_LABOR = [
+    ("electronics_nav", 14, "GO9, radar, in-hull transducer, NMEA 2000 backbone"),
+    ("energy_storage", 22, "24V bank build, busbars, Class T fuse, interconnects"),
+    ("solar_generation", 18, "8-panel array, 4S2P string wiring, MC4 terminations"),
+    ("av_security", 9, "Six camera runs, NVR mount, PoE switch"),
+    ("plumbing", 11, "Black water hose replacement, seacock service"),
+    ("propulsion", 6, "Exhaust replacement, impeller"),
+]
+
+DEMO_NIGHTS = [(21, "2026-06-15", "Summer aboard"), (9, "2026-07-20", "Lake week")]
+
+
+def seed_demo_usage(db: Database) -> dict:
+    """Seed labor and nights. Skipped entirely if either is already recorded,
+    so a real log is never mixed with sample data."""
+    existing = db.one("SELECT COUNT(*) n FROM labor_log")
+    if existing and existing["n"]:
+        return {"skipped": True}
+    with db.tx():
+        for key, hours, note in DEMO_LABOR:
+            row = db.one("SELECT id FROM boat_systems WHERE key=?", (key,))
+            db.execute(
+                """INSERT INTO labor_log (system_id, hours, description, performed_at,
+                     logged_at) VALUES (?,?,?,?,?)""",
+                (row["id"] if row else None, hours, note, None, utcnow()),
+            )
+        for nights, start, note in DEMO_NIGHTS:
+            db.execute(
+                """INSERT INTO usage_log (nights, start_date, note, logged_at)
+                   VALUES (?,?,?,?)""",
+                (nights, start, note, utcnow()),
+            )
+    return {"labor_entries": len(DEMO_LABOR), "nights": sum(n for n, _, _ in DEMO_NIGHTS)}
 
 
 def clear_demo(db: Database) -> int:

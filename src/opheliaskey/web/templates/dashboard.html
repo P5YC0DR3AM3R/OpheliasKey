@@ -180,6 +180,99 @@
     </table>
   </div>
 
+  <h2>Reward</h2>
+  <p class="detail" style="margin:-4px 0 12px">
+    Four separate lenses, deliberately not summed. Refit spend does not return
+    dollar-for-dollar at resale — the sunk figure is not waste, it is what was
+    exchanged for capability and use.
+  </p>
+  <div class="cards">
+    <div class="card"><div class="label">Spent on vessel</div>
+      <div class="value">{{ reward.recovery.vessel_spend_cents | money }}</div></div>
+    <div class="card"><div class="label">Plausibly recoverable</div>
+      <div class="value under">{{ reward.recovery.recoverable_cents | money }}
+        <span class="detail" style="font-size:13px">({{ reward.recovery.recovery_pct }}%)</span>
+      </div></div>
+    <div class="card"><div class="label">Permanently sunk</div>
+      <div class="value over">{{ reward.recovery.sunk_cents | money }}</div></div>
+    {% if reward.labor.logged %}
+    <div class="card"><div class="label">Labor avoided</div>
+      <div class="value under">{{ reward.labor.value_cents | money }}
+        <span class="detail" style="font-size:13px">({{ reward.labor.hours }}h)</span>
+      </div></div>
+    {% endif %}
+    {% if reward.use_value.logged %}
+    <div class="card"><div class="label">Cost per night aboard</div>
+      <div class="value">{{ reward.use_value.cost_per_night_cents | money }}
+        <span class="detail" style="font-size:13px">× {{ reward.use_value.nights }}</span>
+      </div></div>
+    {% endif %}
+  </div>
+
+  <div class="specgrid" style="margin-top:12px">
+    <div class="speccard">
+      <div class="spechead"><strong>Capability delivered</strong></div>
+      <div class="specnums">
+        <span><em>autonomy, no AC</em>
+          {% if reward.capability.days_without_ac is none %}solar covers it
+          {% else %}{{ "%.1f"|format(reward.capability.days_without_ac) }} days{% endif %}</span>
+        {% if reward.capability.days_with_ac_min is not none %}
+        <span><em>with AC</em>{{ "%.1f"|format(reward.capability.days_with_ac_min) }}–{{ "%.1f"|format(reward.capability.days_with_ac_max) }} days</span>
+        {% endif %}
+        <span><em>AC on bank</em>{{ reward.capability.ac_hours_on_bank }}h</span>
+        <span><em>usable</em>{{ reward.capability.usable_kwh }} kWh</span>
+        {% if reward.capability.cents_per_kwh_storage %}
+        <span><em>storage</em>{{ reward.capability.cents_per_kwh_storage | money }}/kWh</span>
+        {% endif %}
+        {% if reward.capability.cents_per_watt_realistic %}
+        <span><em>solar</em>{{ reward.capability.cents_per_watt_realistic | money }}/W real</span>
+        {% endif %}
+      </div>
+      <p class="detail">Read from the same specification as the risk checks, so
+        capability figures and risk findings cannot disagree.</p>
+    </div>
+    <div class="speccard">
+      <div class="spechead"><strong>Use value</strong></div>
+      {% if reward.use_value.logged %}
+      <div class="specnums">
+        <span><em>nights</em>{{ reward.use_value.nights }}</span>
+        <span><em>per night</em>{{ reward.use_value.cost_per_night_cents | money }}</span>
+        <span><em>alternative</em>{{ reward.use_value.alternative_nightly_cents | money }}/night</span>
+      </div>
+      <p class="detail">
+        {% if reward.use_value.nights_remaining %}
+          {{ reward.use_value.nights_remaining }} more nights until the sunk cost is
+          beaten by the alternative.
+        {% else %}
+          The sunk cost is already beaten by the alternative.
+        {% endif %}
+        Amortizes the sunk portion only — the recoverable portion is not consumed by use.
+      </p>
+      {% else %}
+      <p class="detail">No nights logged. Break-even is
+        {{ reward.use_value.breakeven_nights }} nights at
+        {{ reward.use_value.alternative_nightly_cents | money }}/night.
+        Record with <code>okey log nights 14</code>.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="panel scroll" style="margin-top:12px">
+    <table>
+      <thead><tr><th>System</th><th class="num">Spend</th><th class="num">Recovery</th>
+        <th class="num">Recoverable</th><th class="num">Sunk</th><th>Basis</th></tr></thead>
+      <tbody>
+      {% for l in reward.recovery.lines %}
+        <tr><td>{{ l.name }}</td><td class="num">{{ l.spend_cents | money }}</td>
+          <td class="num">{{ (l.rate * 100) | round | int }}%</td>
+          <td class="num under">{{ l.recoverable_cents | money }}</td>
+          <td class="num over">{{ l.sunk_cents | money }}</td>
+          <td class="detail">{{ l.basis }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
   {% if risk.spec_findings %}
   <h2>Specification risk — {{ risk.spec_counts.high }} high ·
       {{ risk.spec_counts.medium }} medium · {{ risk.spec_counts.low }} low</h2>

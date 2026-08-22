@@ -121,9 +121,26 @@ behind a favourable assumption.
 
 ## On reward analysis
 
-The honest framing, which the reports should eventually make explicit: refit
-spend does not return dollar-for-dollar at resale. Most of it never does. The
-defensible measures of return are cost avoided against yard labor rates,
-capability unlocked per dollar, and use-value over the ownership period — not
-appreciation. A tool that implied otherwise would be flattering rather than
-useful.
+Refit spend does not return dollar-for-dollar at resale, and most of it never
+does. That is the premise the reward module is built on, not a caveat appended
+to it.
+
+Four lenses, returned as four separate keys and never summed into a headline
+"total return". Recoverable-vs-sunk, labor avoided, capability delivered, and
+use value measure genuinely different things; adding them would double-count
+the same dollars under different names. A test pins the absence of a combined
+figure, because that is exactly the number a future edit would be tempted to
+add.
+
+Two components are **recorded rather than estimated**. Labor hours and nights
+aboard cannot be derived from receipts, and estimating them would manufacture
+return out of nothing — so they come from `okey log`, and the report states
+plainly when nothing has been logged instead of filling the gap with a default.
+
+Use value amortizes the **sunk** portion only. The recoverable portion is not
+consumed by using the boat; charging it against nights aboard would count it
+twice, once as resale value and once as use.
+
+Capability figures read the same `load_spec` the risk checks use, so the
+capability panel and the risk findings are incapable of disagreeing about the
+vessel.

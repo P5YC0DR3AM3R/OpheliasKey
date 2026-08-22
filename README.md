@@ -120,6 +120,9 @@ okey reconcile             # match orders to bank charges
 okey report cost           # spend by system, vendor, month
 okey report risk           # findings, most severe first
 okey report spec           # engineering risk from the installed specification
+okey report reward         # what the spending actually returned
+okey log labor 12 --system electronics_nav --note "GO9 install"
+okey log nights 14 --from 2026-07-01
 okey report unclassified   # items awaiting attribution
 okey status                # ingestion and processing state
 okey serve                 # local dashboard
@@ -203,6 +206,39 @@ working correctly, not being silenced.
 
 A check that finds nothing wrong returns nothing. None of them fabricate
 reassurance.
+
+## Reward
+
+The honest starting point: **refit spend does not return dollar-for-dollar at
+resale, and most of it never will.** A reward module that implied otherwise
+would be flattering and useless.
+
+`okey report reward` measures what can be defended, in four separate lenses
+that are deliberately **never summed** — they measure different things, and
+adding them would double-count:
+
+| Lens | What it answers | Source |
+|---|---|---|
+| Recoverable vs sunk | What a buyer plausibly pays for, and what is gone | Declared per-system recovery rates |
+| Labor avoided | Work performed instead of purchased | **Recorded** hours — never estimated |
+| Capability delivered | Days of autonomy, AC runtime, $/kWh, $/W at real output | The same spec the risk checks read |
+| Use value | Cost per night aboard, and break-even against the alternative | **Recorded** nights aboard |
+
+Two deliberate constraints:
+
+**Labor and nights are recorded, not estimated.** Guessing install hours would
+manufacture return out of nothing, so both come from `okey log`. With nothing
+logged, the report says so rather than inventing a figure.
+
+**Use value amortizes the sunk portion only.** The recoverable portion is not
+consumed by using the boat, so charging it against nights aboard would
+double-count it.
+
+Recovery rates are heuristics with wide error bars — electronics date fastest
+(20–25%), documented engine work holds best (50%), and anything consumed is 0%.
+They live in one declared table with a stated basis per system, visible via
+`okey report reward --assumptions`, for the same reason the specification
+assumptions do: a number you cannot see is a number you cannot argue with.
 
 ## Tests
 

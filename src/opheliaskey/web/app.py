@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..analysis.cost import cost_report
 from ..analysis.risk import risk_report
+from ..analysis.reward import reward_report
 from ..classify.taxonomy import seed_systems, seed_vessel_meta
 from ..db.database import connect, fmt_money
 
@@ -34,6 +35,7 @@ def dashboard(request: Request):
     db = _db()
     cost = cost_report(db)
     risk = risk_report(db)
+    reward = reward_report(db)
 
     months = cost["by_month"]
     peak = max((m["spend_cents"] for m in months), default=1) or 1
@@ -48,6 +50,7 @@ def dashboard(request: Request):
         "dashboard.html",
         {
             "cost": cost,
+            "reward": reward,
             "risk": risk,
             "months": months,
             "peak": peak,
@@ -60,6 +63,11 @@ def dashboard(request: Request):
 @app.get("/api/cost")
 def api_cost():
     return JSONResponse(cost_report(_db()))
+
+
+@app.get("/api/reward")
+def api_reward():
+    return JSONResponse(reward_report(_db()))
 
 
 @app.get("/api/risk")

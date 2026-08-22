@@ -12,6 +12,7 @@ from .analysis.demo import clear_demo, seed_demo
 from .analysis.reconcile import reconcile as run_reconcile
 from .analysis.risk import risk_report
 from .analysis.spec import spec_report
+from .analysis.reward import reward_report
 from .classify.rules import apply_rules
 from .classify.taxonomy import seed_systems, seed_vessel_meta
 from .config import get_settings
@@ -31,6 +32,13 @@ app.add_typer(report_app, name="report")
 console = Console()
 
 
+def _a_usable() -> float:
+    """Usable-depth assumption, so the panel can show nominal alongside usable."""
+    from .analysis.spec import ASSUMPTIONS
+
+    return ASSUMPTIONS["usable_depth_lifepo4"][0]
+
+
 def _db():
     settings = get_settings()
     settings.ensure_dirs()
@@ -38,6 +46,59 @@ def _db():
     seed_systems(db)
     seed_vessel_meta(db)
     return db
+
+
+log_app = typer.Typer(help="Record labor and usage for reward analysis.", no_args_is_help=True)
+app.add_typer(log_app, name="log")
+
+
+@log_app.command("labor")
+def log_labor(
+    hours: float = typer.Argument(..., help="Hours worked."),
+    system: str = typer.Option("", "--system", help="Boat system key."),
+    note: str = typer.Option("", "--note", help="What was done."),
+    date: str = typer.Option("", "--date", help="YYYY-MM-DD; defaults to today."),
+    rate: float = typer.Option(0.0, "--rate", help="Override the yard rate, $/hour."),
+):
+    """Record work performed rather than paid for.
+
+    Labor avoided is the one part of return that is genuinely dollar-for-dollar,
+    so it is recorded from real hours rather than estimated.
+    """
+    db = _db()
+    system_id = None
+    if system:
+        row = db.one("SELECT id FROM boat_systems WHERE key=?", (system,))
+        if row is None:
+            console.print(f"[red]unknown system '{system}'[/]")
+            raise typer.Exit(1)
+        system_id = row["id"]
+    db.execute(
+        """INSERT INTO labor_log (system_id, hours, description, performed_at,
+             rate_cents, logged_at) VALUES (?,?,?,?,?,?)""",
+        (system_id, hours, note or None, date or utcnow()[:10],
+         int(rate * 100) or None, utcnow()),
+    )
+    console.print(f"[green]logged {hours:g}h[/]" + (f" against {system}" if system else ""))
+
+
+@log_app.command("nights")
+def log_nights(
+    nights: int = typer.Argument(..., help="Nights spent aboard."),
+    start: str = typer.Option("", "--from", help="YYYY-MM-DD."),
+    end: str = typer.Option("", "--to", help="YYYY-MM-DD."),
+    location: str = typer.Option("", "--location"),
+    note: str = typer.Option("", "--note"),
+):
+    """Record nights aboard. Use value cannot be inferred from receipts."""
+    db = _db()
+    db.execute(
+        """INSERT INTO usage_log (nights, start_date, end_date, location, note, logged_at)
+           VALUES (?,?,?,?,?,?)""",
+        (nights, start or None, end or None, location or None, note or None, utcnow()),
+    )
+    total = db.one("SELECT COALESCE(SUM(nights),0) n FROM usage_log")
+    console.print(f"[green]logged {nights} nights[/] — {total['n']} total aboard")
 
 
 @app.command()
@@ -339,6 +400,135 @@ def report_risk():
             console.print(f"  [{palette[finding['severity']]}]●[/] {finding['title']}")
 
 
+@report_app.command("reward")
+def report_reward(
+    assumptions: bool = typer.Option(False, "--assumptions", help="Show the assumption table."),
+):
+    """What the spending actually returned.
+
+    Four separate lenses, deliberately not summed. Refit spend does not return
+    dollar-for-dollar at resale; the defensible return is capability and use.
+    """
+    db = _db()
+    report = reward_report(db)
+    rec, labor = report["recovery"], report["labor"]
+    caps, use = report["capability"], report["use_value"]
+
+    console.print(
+        Panel(
+            f"Spent on the vessel   [bold]{fmt_money(rec['vessel_spend_cents'])}[/]\n"
+            f"Plausibly recoverable [green]{fmt_money(rec['recoverable_cents'])}[/] "
+            f"({rec['recovery_pct']}%)\n"
+            f"Permanently sunk      [red]{fmt_money(rec['sunk_cents'])}[/]\n"
+            + (f"Not yet attributed    [yellow]{fmt_money(rec['unattributed_cents'])}[/] "
+               f"across {rec['unattributed_count']} items — no recovery rate applies\n"
+               if rec["unattributed_cents"] else "")
+            + (f"Retained as tools     {fmt_money(rec['tool_residual_cents'])} "
+               f"(does not convey with the boat)\n" if rec["tool_spend_cents"] else "")
+            + "\n[dim]Refit spend does not return dollar-for-dollar at resale. The sunk\n"
+              "figure is not waste — it is what you exchanged for capability and use.[/]",
+            title="Ophelia's Key — reward", border_style="green",
+        )
+    )
+
+    table = Table("system", "spend", "rate", "recoverable", "sunk")
+    for line in rec["lines"]:
+        table.add_row(
+            line["name"], fmt_money(line["spend_cents"]), f"{line['rate']*100:.0f}%",
+            f"[green]{fmt_money(line['recoverable_cents'])}[/]",
+            f"[red]{fmt_money(line['sunk_cents'])}[/]",
+        )
+    console.print(table)
+
+    # --- labor avoided ---
+    console.print("\n[bold]Labor avoided[/]")
+    if labor["logged"]:
+        console.print(
+            f"  {labor['hours']:g}h performed rather than purchased = "
+            f"[green]{fmt_money(labor['value_cents'])}[/] at "
+            f"{fmt_money(labor['rate_cents'])}/hr"
+        )
+        for entry in labor["by_system"][:6]:
+            console.print(
+                f"    [dim]{entry['name']}[/] {entry['hours']:g}h — "
+                f"{fmt_money(entry['value_cents'])}"
+            )
+    else:
+        console.print(
+            "  [dim]No hours logged. This is the one component of return that is "
+            "genuinely dollar-for-dollar, so it is recorded rather than estimated:[/]\n"
+            "  [dim]okey log labor 12 --system electronics_nav --note \"GO9 install\"[/]"
+        )
+
+    # --- capability ---
+    console.print("\n[bold]Capability delivered[/]")
+    autonomy = (
+        "solar covers the load indefinitely"
+        if caps["days_without_ac"] is None
+        else f"{caps['days_without_ac']:.1f} days"
+    )
+    console.print(f"  Energy autonomy, no AC     {autonomy}")
+    if caps["days_with_ac_min"] is not None:
+        console.print(
+            f"  Energy autonomy, with AC   {caps['days_with_ac_min']:.1f}"
+            f"-{caps['days_with_ac_max']:.1f} days before generator or shore power"
+        )
+    console.print(f"  AC runtime on the bank     {caps['ac_hours_on_bank']:.1f}h")
+    console.print(
+        f"  Usable storage             {caps['usable_kwh']:.2f} kWh of "
+        f"{caps['usable_kwh'] / _a_usable():.2f} kWh nominal"
+    )
+    if caps["cents_per_kwh_storage"]:
+        console.print(
+            f"  Cost of storage            {fmt_money(caps['cents_per_kwh_storage'])}/kWh"
+        )
+    if caps["cents_per_watt_nameplate"]:
+        console.print(
+            f"  Cost of solar              {fmt_money(caps['cents_per_watt_nameplate'])}/W "
+            f"nameplate, [yellow]{fmt_money(caps['cents_per_watt_realistic'])}/W[/] at "
+            f"realistic output"
+        )
+
+    # --- use value ---
+    console.print("\n[bold]Use value[/]")
+    if use["logged"]:
+        console.print(
+            f"  {use['nights']} nights aboard at "
+            f"[green]{fmt_money(use['cost_per_night_cents'])}/night[/] "
+            f"against the sunk cost"
+        )
+        console.print(
+            f"  Alternative would have cost {fmt_money(use['value_realized_cents'])} "
+            f"at {fmt_money(use['alternative_nightly_cents'])}/night"
+        )
+        if use["nights_remaining"]:
+            console.print(
+                f"  [yellow]{use['nights_remaining']} more nights[/] until the sunk cost "
+                f"is beaten by the alternative"
+            )
+        else:
+            console.print("  [green]The sunk cost is already beaten by the alternative.[/]")
+    else:
+        console.print(
+            f"  [dim]No nights logged. Break-even is {use['breakeven_nights']} nights at "
+            f"{fmt_money(use['alternative_nightly_cents'])}/night against "
+            f"{fmt_money(rec['sunk_cents'])} sunk:[/]\n"
+            "  [dim]okey log nights 14 --from 2026-07-01 --note \"summer cruise\"[/]"
+        )
+
+    if assumptions:
+        table = Table("assumption", "value", "basis", title="\nReward assumptions")
+        for key, meta in report["assumptions"].items():
+            table.add_row(key, f"{meta['value']:g}", meta["note"])
+        console.print(table)
+        rates = Table("system", "recovery", "basis", title="\nRecovery rates")
+        for line in rec["lines"]:
+            rates.add_row(line["name"], f"{line['rate']*100:.0f}%", line["basis"])
+        console.print(rates)
+    else:
+        console.print("\n[dim]Run with --assumptions to see the rates behind these.[/]")
+
+
 @report_app.command("spec")
 def report_spec(
     assumptions: bool = typer.Option(False, "--assumptions", help="Show the assumption table."),
@@ -411,6 +601,12 @@ def demo(clear: bool = typer.Option(False, help="Remove demo data instead of add
         return
     stats = seed_demo(db)
     console.print(f"[green]seeded {stats['orders_created']} demo orders[/]")
+    usage = stats.get("usage", {})
+    if usage.get("labor_entries"):
+        console.print(
+            f"[green]seeded {usage['labor_entries']} labor entries and "
+            f"{usage['nights']} nights aboard[/]"
+        )
     console.print("[dim]Now run: okey classify && okey report cost[/]")
 
 

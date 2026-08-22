@@ -238,3 +238,30 @@ LEFT JOIN vendors v ON v.id = o.vendor_id
 LEFT JOIN boat_systems bs ON bs.id = li.system_id
 WHERE li.relevance IS NULL OR li.relevance = 'ambiguous'
    OR (li.relevance = 'boat' AND li.system_id IS NULL);
+
+-- --- Layer 5: reward inputs -------------------------------------------------
+-- Labor performed rather than paid for. This is the one component of return
+-- that is genuinely dollar-for-dollar, so it is recorded rather than estimated.
+
+CREATE TABLE IF NOT EXISTS labor_log (
+    id           INTEGER PRIMARY KEY,
+    system_id    INTEGER REFERENCES boat_systems(id),
+    hours        REAL    NOT NULL,
+    description  TEXT,
+    performed_at TEXT,
+    rate_cents   INTEGER,          -- override the default yard rate for this entry
+    logged_at    TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_labor_system ON labor_log (system_id);
+
+-- Nights actually spent aboard. Use-value is the real return on a liveaboard
+-- refit, and it cannot be estimated from purchase data.
+CREATE TABLE IF NOT EXISTS usage_log (
+    id         INTEGER PRIMARY KEY,
+    nights     INTEGER NOT NULL,
+    start_date TEXT,
+    end_date   TEXT,
+    location   TEXT,
+    note       TEXT,
+    logged_at  TEXT    NOT NULL
+);
