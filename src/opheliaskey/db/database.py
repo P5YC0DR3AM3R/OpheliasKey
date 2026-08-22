@@ -74,10 +74,36 @@ class Database:
             self._conn.execute("PRAGMA journal_mode = WAL")
         return self._conn
 
+    # Columns added after the initial schema. CREATE TABLE IF NOT EXISTS will
+    # not add a column to a table that already exists, so additive changes are
+    # applied explicitly here. Each entry is (table, column, SQL type clause).
+    COLUMN_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+        ("line_items", "relevance", "TEXT"),
+        ("line_items", "relevance_by", "TEXT"),
+        ("line_items", "relevance_conf", "REAL"),
+        ("line_items", "relevance_note", "TEXT"),
+    )
+
     def migrate(self) -> None:
-        """Apply schema.sql. Every statement is CREATE ... IF NOT EXISTS, so
-        this is idempotent and safe to run on every startup."""
+        """Apply schema.sql, then any additive column migrations.
+
+        schema.sql is all CREATE ... IF NOT EXISTS, so it is idempotent but
+        cannot alter existing tables; COLUMN_MIGRATIONS covers that gap."""
         self.conn.executescript(SCHEMA_PATH.read_text())
+        for table, column, decl in self.COLUMN_MIGRATIONS:
+            if not self._has_column(table, column):
+                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        # Views are dropped and recreated so a changed definition takes effect;
+        # CREATE VIEW IF NOT EXISTS would otherwise keep a stale one forever.
+        self.conn.executescript(
+            "DROP VIEW IF EXISTS v_review_queue; DROP VIEW IF EXISTS v_unclassified; "
+            "DROP VIEW IF EXISTS v_spend_by_system;"
+        )
+        self.conn.executescript(SCHEMA_PATH.read_text())
+
+    def _has_column(self, table: str, column: str) -> bool:
+        rows = self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return any(r[1] == column for r in rows)
 
     @contextmanager
     def tx(self) -> Iterator[sqlite3.Connection]:

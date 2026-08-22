@@ -18,67 +18,91 @@ TAX_RATE = 0.089
 # (days_ago, vendor_domain, shipping_cents, [(description, qty, unit_price)])
 # Order totals are computed: sum(line items) + shipping + tax.
 DEMO_ORDERS = [
-    (240, "defender.com", 4500, [
-        ("Rocna 33 lb Galvanized Anchor", 1, 79900),
-        ("ACCO G4 High Test Chain 5/16in x 200ft", 1, 189900),
-        ("Mantus Chain Hook with Bridle", 1, 19650)]),
-    (232, "amazon.com", 0, [
-        ("Victron SmartSolar MPPT 100/30 Charge Controller", 1, 28999),
-        ("Ancor Marine Grade Tinned Wire 10 AWG 100ft", 1, 8499),
-        ("Heat Shrink Butt Connectors Marine 120pc", 1, 3799)]),
-    (210, "westmarine.com", 2400, [
-        ("Interlux Micron 66 Antifouling Bottom Paint Gallon", 2, 42900),
-        ("Interlux Fiberglass Bottomkote Primer Quart", 1, 8900),
-        ("3M Sandpaper Assortment 80-220 Grit", 4, 1925)]),
-    (196, "amazon.com", 0, [
-        ("Garmin GPSMAP 923xsv Chartplotter with Transducer", 1, 219900)]),
-    (180, "fisheriessupply.com", 1850, [
-        ("Yanmar 3YM30 Raw Water Pump Impeller Kit", 2, 8940),
-        ("Racor 500FG Turbine Fuel Filter Water Separator", 1, 44900),
-        ("Yanmar Fuel Filter Element 41650-502320", 3, 1200),
-        ("Marine Exhaust Elbow Gasket Set", 1, 2760)]),
-    (165, "amazon.com", 0, [
-        ("3M 5200 Fast Cure Marine Sealant White 10oz", 2, 2399),
-        ("Nitrile Gloves Box of 100", 1, 1899),
-        ("3M Blue Painters Tape 1.88in 3-pack", 1, 2049)]),
-    (150, "westmarine.com", 0, [
-        ("Harken 46 Self-Tailing Two-Speed Winch", 2, 189900),
-        ("Harken Winch Service Kit", 1, 7900),
-        ("Genoa Track Car with Ball Bearings", 4, 17800)]),
-    (140, "homedepot.com", 0, [
-        ("DEWALT 20V Max Random Orbital Sander", 1, 14900),
-        ("Respirator Half Mask with P100 Filters", 1, 4499),
-        ("Shop Rags 50-pack", 1, 2477)]),
-    (120, "defender.com", 3900, [
-        ("Lewmar V700 Vertical Windlass 12V", 1, 149900),
-        ("Windlass Circuit Breaker 90A", 1, 12400),
-        ("Anchor Snubber Line 5/8in Nylon 30ft", 1, 12200)]),
-    (95, "jamestowndistributors.com", 2200, [
-        ("West System 105 Epoxy Resin Gallon", 1, 32900),
-        ("West System 205 Fast Hardener Quart", 1, 18900),
-        ("Biaxial Fiberglass Cloth 1708 50in x 10yd", 1, 16620)]),
+    # Power system — the dominant spend on this vessel.
+    (250, "amazon.com", 0, [
+        ("Dumfume 12.8V 600Ah LiFePO4 Battery 200A BMS", 2, 129900)]),
+    (245, "amazon.com", 0, [
+        ("Lonsge 4000W Pure Sine Wave Hybrid Solar Inverter 24V 140A MPPT", 1, 89900),
+        ("4/0 AWG Battery Cable Lugs Tinned Copper 20pc", 1, 4299),
+        ("Class T Fuse 400A with Block", 1, 6850)]),
+    (238, "amazon.com", 1200, [
+        ("Flexible Solar Panel 500W Monocrystalline", 8, 32900),
+        ("MC4 Solar Connectors Waterproof 12 Pair", 1, 1899),
+        ("10 AWG Solar Extension Cable 30ft Pair", 2, 4299)]),
+    (220, "amazon.com", 0, [
+        ("Genkins 8000W Portable Quiet Inverter Generator Electric Start", 1, 139900)]),
+    # Personal purchases in the same account and window.
+    (216, "amazon.com", 0, [
+        ("OluKai Ulele Men's Beach Sandals Size 11", 1, 11000)]),
+    (210, "amazon.com", 0, [
+        ("Victron SmartShunt 500A Battery Monitor", 1, 12999),
+        ("Blue Sea Systems 5026 ST Blade Fuse Block", 2, 8999),
+        ("Ancor Marine Grade Tinned Wire 10 AWG 100ft", 1, 8499)]),
+    # Genuinely ambiguous without vessel context: these are the camera and
+    # nav-computer support hardware, not household networking.
+    (198, "amazon.com", 0, [
+        ("TP-Link LS108GP 8 Port PoE+ Network Switch", 1, 5999),
+        ("Cat6 Outdoor Ethernet Cable 100ft Direct Burial", 2, 3499),
+        ("GMKtec G11 Mini PC Ryzen 7 16GB 512GB", 1, 29900)]),
+    (190, "amazon.com", 0, [
+        ("4K PoE Security Camera Outdoor IP67", 6, 8999),
+        ("8 Channel NVR 4K 2TB", 1, 21999)]),
+    (176, "amazon.com", 0, [
+        ("Simrad GO9 XSE Chartplotter with Active Imaging", 1, 149900),
+        ("Airmar P79 In-Hull Depth Transducer", 1, 22900),
+        ("NMEA 2000 Starter Kit Backbone", 1, 15900),
+        ("NMEA 2000 Drop Cable 2m", 4, 2899)]),
+    (160, "amazon.com", 0, [
+        ("Halo20+ Radar Dome", 1, 219900)]),
+    (150, "amazon.com", 0, [
+        ("Starlink Mini Roam Kit", 1, 59900)]),
+    (140, "amazon.com", 0, [
+        ("Rockville dB13 3000W Mono Amplifier", 2, 12999),
+        ("Marine 6.5in Coaxial Speakers Waterproof Pair", 3, 6499),
+        ("Marine Head Unit Bluetooth Receiver", 1, 13999)]),
+    # Personal again.
+    (132, "amazon.com", 0, [
+        ("DoorDash DashPass Annual Subscription", 1, 9600)]),
+    (120, "amazon.com", 0, [
+        ("Air Conditioner 12000 BTU 120V Marine", 1, 119900),
+        ("Insulated Ducting 4in 25ft", 1, 6900)]),
+    (105, "amazon.com", 0, [
+        ("Sanitation Hose 1.5in OdorSafe Black Water 25ft", 1, 18995),
+        ("Bronze Ball Valve Seacock 1.5in", 3, 3500),
+        ("Marine Grade Hose Clamps Stainless 20pc", 2, 3299)]),
+    (92, "amazon.com", 0, [
+        ("Marine Exhaust Hose 4in Wet Wrapped 10ft", 1, 27900),
+        ("Raw Water Pump Impeller Kit", 2, 4890)]),
     (78, "amazon.com", 0, [
-        ("Balmar 100A Alternator Kit with Regulator", 1, 129900)]),
-    (60, "westmarine.com", 1500, [
-        ("Standing Rigging Wire 1x19 5/16in 100ft", 1, 52900),
-        ("Sta-Lok Swageless Terminal 5/16in", 4, 8687)]),
-    (45, "amazon.com", 0, [
-        ("Blue Sea Systems 5026 ST Blade Fuse Block", 1, 8999),
-        ("Victron BMV-712 Battery Monitor with Shunt", 1, 25986)]),
-    (30, "fisheriessupply.com", 0, [
-        ("Haul-out, pressure wash and blocking, 38ft sailboat", 1, 145000),
-        ("Yard storage, monthly", 1, 65000)]),
-    (12, "amazon.com", 0, [
-        ("Marine Grade Hose Clamps Stainless 20pc", 1, 3299),
-        ("Sanitation Hose 1.5in OdorSafe 10ft", 1, 8995),
-        ("Bronze Ball Valve Seacock 1.5in", 1, 3500)]),
+        ("Hotkesa Boat Seat Pedestal Adjustable", 1, 12999),
+        ("Captain Helm Chair with Bolster Marine Vinyl", 1, 48900)]),
+    (64, "amazon.com", 0, [
+        ("Diver Down Flag with 4 FT Pole and Base", 1, 3499),
+        ("12x18in Diver Down Scuba Flag", 2, 1299),
+        ("Type II Life Jackets 4 Pack USCG Approved", 1, 5999),
+        ("Fire Extinguisher Marine B-1 Rated", 2, 3299)]),
+    # Personal: unrelated auto maintenance.
+    (55, "amazon.com", 0, [
+        ("Firestone Complete Auto Care Oil Change and Tire Rotation", 1, 8947)]),
+    (40, "amazon.com", 0, [
+        ("Exterior Cooler 65qt Marine White", 2, 24900),
+        ("Stainless Cooler Mounting Brackets", 1, 4599)]),
+    (22, "signsbytomorrow.com", 0, [
+        ("UV Laminated Digitally Printed Boat Decal Cut Contour", 1, 28500),
+        ("Registration Number Vinyl MT9740CA", 1, 6500)]),
+    (10, "amazon.com", 0, [
+        ("3M 5200 Fast Cure Marine Sealant White 10oz", 3, 2399),
+        ("Marine Grade Heat Shrink Butt Connectors 120pc", 1, 3799),
+        ("Stainless Steel Screws Assortment 18-8", 1, 2899)]),
 ]
 
 DEMO_BUDGET = {
-    "ground_tackle": 400000, "electrical": 500000, "paint_coatings": 150000,
-    "electronics": 250000, "propulsion": 300000, "deck_hardware": 400000,
-    "rigging": 350000, "hull_structure": 200000, "consumables": 100000,
-    "tools": 75000, "yard_services": 250000, "plumbing": 120000,
+    "energy_storage": 300000, "power_conversion": 120000, "solar_generation": 300000,
+    "generator": 150000, "dc_distribution": 60000, "ac_distribution": 40000,
+    "electronics_nav": 450000, "connectivity": 80000, "av_security": 200000,
+    "climate": 150000, "plumbing": 80000, "interior": 100000,
+    "propulsion": 100000, "safety": 30000, "dive": 15000,
+    "consumables": 40000, "fees_admin": 40000,
 }
 
 

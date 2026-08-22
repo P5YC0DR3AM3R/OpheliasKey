@@ -12,8 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from opheliaskey.analysis.cost import totals
 from opheliaskey.analysis.reconcile import reconcile
-from opheliaskey.analysis.risk import line_item_coverage, unclassified_spend
-from opheliaskey.classify.rules import classify_description
+from opheliaskey.analysis.risk import (
+    line_item_coverage,
+    unclassified_spend,
+    unreviewed_spend,
+)
+from opheliaskey.classify.rules import classify_description, classify_relevance
 from opheliaskey.classify.taxonomy import seed_systems
 from opheliaskey.db.database import Database, fmt_money, money, utcnow
 from opheliaskey.parsing.email_parser import parse_email
@@ -48,12 +52,18 @@ def test_negative_money_formats_sign_before_dollar():
 
 @pytest.mark.parametrize("text,system", [
     ("Rocna 33 lb Galvanized Anchor", "ground_tackle"),
-    ("Victron SmartSolar MPPT 100/30 Charge Controller", "electrical"),
-    ("Interlux Micron 66 Antifouling Bottom Paint", "paint_coatings"),
-    ("Yanmar 3YM30 Raw Water Pump Impeller Kit", "propulsion"),
-    ("Harken 46 Self-Tailing Winch", "deck_hardware"),
+    ("Lonsge 4000W Pure Sine Wave Hybrid Inverter", "power_conversion"),
+    ("Dumfume 12.8V 600Ah LiFePO4 Battery", "energy_storage"),
+    ("Flexible Solar Panel 500W Monocrystalline", "solar_generation"),
+    ("Genkins 8000W Portable Inverter Generator", "generator"),
+    ("Simrad GO9 XSE Chartplotter", "electronics_nav"),
+    ("Starlink Mini Roam Kit", "connectivity"),
+    ("Sanitation Hose OdorSafe Black Water", "plumbing"),
+    ("Diver Down Flag with Pole", "dive"),
+    ("Raw Water Pump Impeller Kit", "propulsion"),
 ])
-def test_classifier_places_marine_skus(text, system):
+def test_classifier_places_vessel_skus(text, system):
+    """The taxonomy is built for this vessel: six power systems, no rigging."""
     assert classify_description(text).system_key == system
 
 
@@ -187,10 +197,14 @@ def test_no_coverage_gap_when_tax_and_shipping_explain_it(db):
     assert line_item_coverage(db) == []
 
 
-def test_unclassified_spend_reported(db):
+def test_unclassified_spend_counts_only_boat_items(db):
+    """A personal item with no boat system is correct, not a coverage gap."""
     _make_order(db, total=50000, items=[50000])
-    findings = unclassified_spend(db)
-    assert findings[0]["amount_cents"] == 50000
+    db.execute("UPDATE line_items SET relevance='boat'")
+    assert unclassified_spend(db)[0]["amount_cents"] == 50000
+
+    db.execute("UPDATE line_items SET relevance='personal'")
+    assert unclassified_spend(db) == []
 
 
 # --- reconciliation ---------------------------------------------------------
@@ -228,18 +242,66 @@ def test_reconcile_ignores_far_away_transactions(db):
 
 # --- totals -----------------------------------------------------------------
 
-def test_net_spend_excludes_cancelled_and_subtracts_refunds(db):
-    order_id = _make_order(db, total=100000, items=[100000])
-    db.execute(
-        "INSERT INTO orders (source, external_order_id, status, total_cents, created_at, "
-        "updated_at) VALUES ('test','cancelled-1','cancelled',999900,?,?)", (utcnow(), utcnow()))
+def test_project_spend_excludes_personal_and_subtracts_refunds(db):
+    """The headline number counts boat line items only. Personal spend in the
+    same account must never reach it."""
+    order_id = _make_order(db, total=150000, items=[100000, 50000])
+    items = db.query("SELECT id FROM line_items ORDER BY line_no")
+    db.execute("UPDATE line_items SET relevance='boat' WHERE id=?", (items[0]["id"],))
+    db.execute("UPDATE line_items SET relevance='personal' WHERE id=?", (items[1]["id"],))
     db.execute(
         "INSERT INTO refunds (order_id, kind, amount_cents, status) "
         "VALUES (?, 'refund', 25000, 'completed')", (order_id,))
+
     result = totals(db)
-    assert result["gross_cents"] == 100000       # cancelled order excluded
+    assert result["project_gross_cents"] == 100000   # the personal $500 is excluded
+    assert result["personal_cents"] == 50000
     assert result["refunded_cents"] == 25000
     assert result["net_cents"] == 75000
+
+
+def test_unreviewed_spend_is_reported_not_absorbed(db):
+    """Undecided items must appear as their own figure rather than defaulting
+    into or out of the project total."""
+    _make_order(db, total=80000, items=[80000])   # relevance left NULL
+    result = totals(db)
+    assert result["project_gross_cents"] == 0
+    assert result["personal_cents"] == 0
+    assert result["unreviewed_cents"] == 80000
+
+    finding = unreviewed_spend(db)[0]
+    assert finding["code"] == "unreviewed_relevance"
+    assert finding["amount_cents"] == 80000
+
+
+# --- relevance --------------------------------------------------------------
+
+@pytest.mark.parametrize("text,expected", [
+    ("Sanitation Hose 1.5in OdorSafe Black Water", "boat"),
+    ("Starlink Mini Roam Kit", "boat"),
+    ("Diver Down Flag with 4 FT Pole", "boat"),
+    ("OluKai Ulele Men's Beach Sandals", "personal"),
+    ("DoorDash DashPass Annual Subscription", "personal"),
+    ("Firestone Complete Auto Care Oil Change", "personal"),
+])
+def test_relevance_rules_decide_clear_cases(text, expected):
+    relevance, confidence = classify_relevance(text)
+    assert relevance == expected
+    assert confidence >= 0.75
+
+
+@pytest.mark.parametrize("text", [
+    "TP-Link LS108GP 8 Port PoE+ Network Switch",
+    "GMKtec G11 Mini PC Ryzen 7 16GB",
+    "Rockville dB13 3000W Mono Amplifier",
+])
+def test_ambiguous_items_defer_to_the_llm(text):
+    """Generic hardware genuinely could be boat or household. Keyword rules
+    must not decide it — the LLM pass gets the vessel spec and can reason that
+    a PoE switch fits a boat running six 4K cameras."""
+    relevance, confidence = classify_relevance(text)
+    assert relevance is None
+    assert confidence == 0.0
 
 
 # --- plural handling (regression) -------------------------------------------
@@ -247,8 +309,8 @@ def test_net_spend_excludes_cancelled_and_subtracts_refunds(db):
 @pytest.mark.parametrize("text,system", [
     ("Marine Grade Hose Clamps Stainless 20pc", "plumbing"),
     ("Rocna 33 lb Galvanized Anchors", "ground_tackle"),
-    ("Harken 46 Self-Tailing Winches", "deck_hardware"),
     ("Bronze Ball Valve Seacocks 1.5in", "plumbing"),
+    ("4K PoE Security Cameras Outdoor", "av_security"),
 ])
 def test_classifier_matches_plural_product_titles(text, system):
     """Product titles pluralize freely. A plain \\b anchor silently fails on
@@ -256,7 +318,28 @@ def test_classifier_matches_plural_product_titles(text, system):
     assert classify_description(text).system_key == system
 
 
-def test_ambiguous_cross_system_item_is_refused():
-    """A windlass circuit breaker is genuinely both electrical and ground
-    tackle. It must land below the confidence floor, not pick a side."""
-    assert classify_description("Windlass Circuit Breaker 90A").confidence < 0.6
+def test_unrecognized_item_yields_no_system():
+    """Nothing in the catalog matches, so no system is assigned."""
+    assert classify_description("Greeting card birthday").system_key is None
+
+
+def test_manual_verdicts_survive_reclassify(db):
+    """A human decision is final. --reclassify must not silently overwrite it,
+    even when the keyword rules would reach the opposite conclusion."""
+    from opheliaskey.classify.rules import apply_rules
+
+    cur = db.execute(
+        "INSERT INTO orders (source, external_order_id, status, total_cents, created_at, "
+        "updated_at) VALUES ('test','o-manual','delivered',5000,?,?)", (utcnow(), utcnow()))
+    order_id = int(cur.lastrowid)
+    # The rules confidently call this 'personal'; the human said otherwise.
+    db.execute(
+        "INSERT INTO line_items (order_id, line_no, description, total_cents, relevance, "
+        "relevance_by, relevance_conf) VALUES (?,0,'OluKai Ulele beach sandals',5000,"
+        "'boat','manual',1.0)", (order_id,))
+
+    apply_rules(db, reclassify=True)
+
+    row = db.one("SELECT relevance, relevance_by FROM line_items WHERE order_id=?", (order_id,))
+    assert row["relevance"] == "boat"
+    assert row["relevance_by"] == "manual"

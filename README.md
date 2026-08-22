@@ -1,8 +1,15 @@
 # Ophelia's Key
 
 Purchase intelligence for the Ophelia's Key boat project. Ingests every purchase
-from Gmail, Amazon Business and the bank, attributes each line item to a boat
-system, and reports cost, budget variance and risk.
+from Gmail, Amazon Business and the bank, separates project spend from personal
+spend in a shared account, attributes each line item to a boat system, and
+reports cost, budget variance and risk.
+
+**The vessel:** a liveaboard pleasure craft on Montana permanent registration
+(MT9740CA), with a substantial off-grid electrical system — a 4 kW solar array,
+15.36 kWh of LiFePO4 across an isolated 24V/12V split, a 4 kW hybrid inverter and
+an 8 kW backup generator, running Simrad GO9, radar, Starlink, NMEA 2000 and six
+4K cameras. The system taxonomy is built for that boat, not a generic one.
 
 ## Why it is built this way
 
@@ -15,6 +22,11 @@ rebuilds everything from the raw store — the mailbox is never re-walked.
 is reported as unclassified spend. An order that matches two candidate bank
 charges is left unreconciled. A wrong number in a cost analysis is worse than a
 missing one, because a missing one announces itself.
+
+**The project total carries its own error bar.** The account is mixed, so every
+line item is gated on relevance — `boat`, `personal`, or undecided. Undecided
+spend is never folded silently into either side; it is reported as its own
+figure, so you always know how far the headline number could move.
 
 **Money is integer cents everywhere.** No floats touch a dollar figure.
 
@@ -33,7 +45,9 @@ Then `okey init` to create the database and seed the boat-system taxonomy.
 okey demo && okey classify && okey report cost && okey report risk
 ```
 
-Loads a realistic 15-order refit. `okey demo --clear` removes it; demo rows use
+Loads a realistic 22-order sample mixing boat and personal purchases, so the
+relevance gate is actually exercised. The LLM pass additionally needs
+`ANTHROPIC_API_KEY` (or an `ant auth login` profile). `okey demo --clear` removes it; demo rows use
 the source `demo` and can never be confused with real data.
 
 ## Data sources
@@ -99,7 +113,9 @@ okey ingest gmail --full   # pull order emails
 okey ingest amazon --full  # pull Amazon Business data
 okey ingest plaid          # pull bank transactions
 okey parse                 # raw documents -> orders + line items
-okey classify              # attribute line items to boat systems
+okey classify              # rules pass: relevance + systems
+okey classify --llm        # LLM pass over what rules could not place
+okey review                # clear the human review queue
 okey reconcile             # match orders to bank charges
 okey report cost           # spend by system, vendor, month
 okey report risk           # findings, most severe first
@@ -111,11 +127,39 @@ okey serve                 # local dashboard
 A full refresh is `okey parse --reparse`, which rebuilds every derived table
 from the raw store.
 
+## Classification
+
+Two independent questions, answered in three passes.
+
+**Relevance** — is this purchase for the vessel at all? **System** — which of the
+26 boat systems does it belong to?
+
+1. **Rules** (free, instant, auditable) handle what keywords settle with high
+   precision. They answer only what they can answer; everything else is left
+   `NULL`.
+2. **LLM pass** (`okey classify --llm`) handles the rest, with the vessel
+   specification in its system prompt. This is the point of the whole design: a
+   TP-Link PoE switch is an ordinary household purchase in the abstract, but
+   against a boat running six 4K PoE cameras it is obviously part of the camera
+   system. The prompt is stable across batches and marked for prompt caching, so
+   the spec and catalog are billed once.
+3. **Human review** (`okey review`) clears anything still ambiguous or
+   low-confidence. Manual verdicts are final — neither rules nor the LLM will
+   overwrite them.
+
+```bash
+okey review                                              # see the queue
+okey review --item 5 --mark boat --system solar_generation
+```
+
 ## Boat systems
 
-Twenty systems from `hull_structure` through `fees_admin`, each flagged capital
-or consumable — the distinction between spend that becomes part of the vessel
-and spend that is used up. See `src/opheliaskey/classify/taxonomy.py`.
+Twenty-six systems, built around this vessel. Power is split six ways —
+`solar_generation`, `energy_storage`, `power_conversion`, `generator`,
+`ac_distribution`, `dc_distribution` — because each is independently budgeted
+and independently capable of overrunning. Sailing systems are absent by design.
+Each system is flagged capital or consumable. See
+`src/opheliaskey/classify/taxonomy.py`.
 
 ## Risk findings
 
@@ -127,7 +171,8 @@ and spend that is used up. See `src/opheliaskey/classify/taxonomy.py`.
 | `spend_without_receipt` | A bank charge with no matching order — real spend, no itemization |
 | `orders_unreconciled` | An order with no matching bank charge |
 | `coverage_gap` | Order totals exceed their line items, tax and shipping |
-| `unclassified` | Line items with no system attributed |
+| `unclassified` | Boat line items with no system attributed |
+| `unreviewed_relevance` | Items not yet confirmed boat or personal — the total's error bar |
 | `vendor_concentration` | Over half of spend with a single supplier |
 
 ## Tests

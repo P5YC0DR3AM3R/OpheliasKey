@@ -16,7 +16,9 @@ Four stages, each independently re-runnable:
 1. **Ingest** — sources fetch bytes and call `store_raw`. They never write to
    `orders` or `line_items`.
 2. **Parse** — raw documents become orders, line items and transactions.
-3. **Classify** — line items are attributed to boat systems.
+3. **Classify** — two independent questions per line item: is it project spend
+   (relevance), and which system does it belong to. Three passes: rules, then
+   LLM with vessel context, then human review.
 4. **Analyze** — cost, risk and reconciliation reports read the normalized
    tables.
 
@@ -38,6 +40,10 @@ Three places deliberately decline rather than guess:
 
 - **Classification.** Below the confidence floor, `system_id` stays `NULL` and
   the amount appears under `unclassified` in the risk report.
+- **Relevance.** When keywords indicate both boat and personal, or neither, the
+  rules return nothing rather than picking a side. The item defers to the LLM,
+  and from there to a human. Undecided spend is reported as its own figure, so
+  the project total always states how far it could move.
 - **Reconciliation.** Two candidate charges of the same amount in the same week
   produce no link. A wrong link would corrupt both the unreconciled-orders and
   spend-without-receipt signals simultaneously.
@@ -80,9 +86,11 @@ touches a dollar figure.
 - **Heuristic email parsing yields totals without itemization.** These orders
   are counted in net spend but contribute nothing to system-level breakdowns —
   the `coverage_gap` finding quantifies exactly how much.
-- **Rule-based classification has a ceiling.** It handles marine SKUs well
-  because the vocabulary is distinctive, but generic items ("USB-C cable") are
-  correctly refused. An LLM pass over the refusals is the natural next step.
+- **Rule-based classification has a ceiling.** It handles distinctive marine
+  vocabulary well, but generic hardware is genuinely undecidable from keywords —
+  which is what the LLM pass, with the vessel spec as context, exists to resolve.
+- **The LLM pass costs money and needs credentials.** It is opt-in
+  (`--llm`) rather than part of the default classify run.
 - **Reward analysis is not yet implemented.** See below.
 
 ## On reward analysis

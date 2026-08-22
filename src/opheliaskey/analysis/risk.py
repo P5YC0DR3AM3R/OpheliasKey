@@ -149,7 +149,7 @@ def vendor_concentration(db: Database, threshold: float = 0.5) -> list[dict]:
 def unclassified_spend(db: Database) -> list[dict]:
     row = db.one(
         """SELECT COUNT(*) AS n, COALESCE(SUM(total_cents),0) AS amt
-           FROM line_items WHERE system_id IS NULL"""
+           FROM line_items WHERE system_id IS NULL AND relevance = 'boat'"""
     )
     if not row or not row["n"]:
         return []
@@ -197,6 +197,29 @@ def line_item_coverage(db: Database, tolerance_cents: int = 100) -> list[dict]:
     ]
 
 
+def unreviewed_spend(db: Database) -> list[dict]:
+    """Line items whose project relevance is still undecided.
+
+    This is the project total's error bar. Until it is cleared, every figure
+    below could move by this much in either direction."""
+    row = db.one(
+        """SELECT COUNT(*) AS n, COALESCE(SUM(total_cents), 0) AS amt
+           FROM line_items WHERE relevance IS NULL OR relevance = 'ambiguous'"""
+    )
+    if not row or not row["n"]:
+        return []
+    return [
+        _finding(
+            "high" if row["amt"] > 100000 else "medium",
+            "unreviewed_relevance",
+            f"{row['n']} line item{'s' if row['n'] != 1 else ''} not yet confirmed boat or personal",
+            "Project spend could move by this amount in either direction. "
+            "Clear the queue with `okey review`.",
+            row["amt"],
+        )
+    ]
+
+
 def risk_report(db: Database) -> dict:
     findings = (
         budget_overruns(db)
@@ -206,6 +229,7 @@ def risk_report(db: Database) -> dict:
         + vendor_concentration(db)
         + unclassified_spend(db)
         + line_item_coverage(db)
+        + unreviewed_spend(db)
     )
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 9), -(f["amount_cents"] or 0)))
 

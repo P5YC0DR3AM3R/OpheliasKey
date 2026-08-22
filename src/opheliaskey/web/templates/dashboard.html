@@ -51,6 +51,12 @@
   .spark > div { flex:1; background:var(--accent); border-radius:2px 2px 0 0; min-height:2px;
                  opacity:.85; }
   .scroll { overflow-x:auto; }
+  .warnv { color:var(--warn); } .dimv { color:var(--dim); }
+  .notice { margin-top:14px; padding:12px 15px; border-radius:9px;
+            border:1px solid var(--line); background:var(--panel);
+            border-left:3px solid var(--warn); font-size:14px; color:var(--ink); }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px;
+         background:var(--line); padding:2px 6px; border-radius:4px; }
 </style>
 </head>
 <body>
@@ -62,7 +68,7 @@
   </header>
 
   <div class="cards">
-    <div class="card"><div class="label">Net spend</div>
+    <div class="card"><div class="label">Project spend</div>
       <div class="value">{{ cost.totals.net_cents | money }}</div></div>
     <div class="card"><div class="label">Budget</div>
       <div class="value">{{ risk.budget_total_cents | money }}</div></div>
@@ -73,9 +79,19 @@
     {% endif %}
     <div class="card"><div class="label">Burn / month</div>
       <div class="value">{{ cost.monthly_burn_cents | money }}</div></div>
-    <div class="card"><div class="label">Unattributed</div>
-      <div class="value">{{ cost.totals.unattributed_cents | money }}</div></div>
+    <div class="card"><div class="label">Unreviewed</div>
+      <div class="value warnv">{{ cost.totals.unreviewed_cents | money }}</div></div>
+    <div class="card"><div class="label">Excluded as personal</div>
+      <div class="value dimv">{{ cost.totals.personal_cents | money }}</div></div>
   </div>
+
+  {% if cost.totals.unreviewed_cents %}
+  <div class="notice">
+    <strong>{{ cost.totals.unreviewed_count }} line items</strong> worth
+    {{ cost.totals.unreviewed_cents | money }} have not been confirmed as boat or
+    personal. Project spend above could move by that much in either direction.
+  </div>
+  {% endif %}
 
   {% if months %}
   <h2>Spend by month</h2>
@@ -149,19 +165,30 @@
     </table>
   </div>
 
-  {% if unclassified %}
-  <h2>Awaiting attribution</h2>
+  {% if review_queue %}
+  <h2>Review queue — {{ review_total.n }} items, {{ review_total.amt | money }} at stake</h2>
   <div class="panel scroll">
     <table>
-      <thead><tr><th>Item</th><th class="num">Amount</th><th>Vendor</th></tr></thead>
+      <thead><tr><th>ID</th><th>Item</th><th class="num">Amount</th><th>Vendor</th>
+        <th>Call</th><th>Why</th></tr></thead>
       <tbody>
-      {% for u in unclassified %}
-        <tr><td>{{ u.description[:78] }}</td><td class="num">{{ u.total_cents | money }}</td>
-            <td class="detail">{{ u.vendor or '—' }}</td></tr>
+      {% for u in review_queue %}
+        <tr>
+          <td class="detail">{{ u["id"] }}</td>
+          <td>{{ u.description[:62] }}</td>
+          <td class="num">{{ u.total_cents | money }}</td>
+          <td class="detail">{{ u.vendor or '—' }}</td>
+          <td>{% if u.relevance %}<span class="sev {{ 'medium' if u.relevance == 'ambiguous' else 'low' }}">{{ u.relevance }}</span>{% else %}<span class="detail">—</span>{% endif %}</td>
+          <td class="detail">{{ (u.relevance_note or '')[:70] }}</td>
+        </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
+  <p class="detail" style="margin-top:10px">
+    Resolve from the CLI:
+    <code>okey review --item &lt;id&gt; --mark boat --system electronics_nav</code>
+  </p>
   {% endif %}
 
 </div>

@@ -17,6 +17,7 @@ dependencies = [
     "google-auth-oauthlib>=1.2",
     "beautifulsoup4>=4.12",
     "lxml>=5.2",
+    "anthropic>=0.40",
     # Plaid is called over plain REST via httpx; the SDK adds churn without value.
 ]
 

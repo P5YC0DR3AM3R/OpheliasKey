@@ -95,6 +95,12 @@ CREATE TABLE IF NOT EXISTS line_items (
     classified_by    TEXT,                   -- rule | llm | manual
     classify_conf    REAL,                   -- 0..1
     classified_at    TEXT,
+    -- Is this line part of the project at all? Kept separate from system_id:
+    -- an item can be confidently 'boat' while its system is still unknown.
+    relevance        TEXT,                   -- boat | personal | ambiguous
+    relevance_by     TEXT,                   -- rule | llm | manual
+    relevance_conf   REAL,
+    relevance_note   TEXT,
     UNIQUE (order_id, line_no)
 );
 CREATE INDEX IF NOT EXISTS idx_items_system ON line_items (system_id);
@@ -221,3 +227,14 @@ FROM line_items li
 JOIN orders o ON o.id = li.order_id
 LEFT JOIN vendors v ON v.id = o.vendor_id
 WHERE li.system_id IS NULL;
+
+CREATE VIEW IF NOT EXISTS v_review_queue AS
+SELECT li.id, li.description, li.total_cents, li.relevance, li.relevance_conf,
+       li.relevance_note, bs.key AS system_key, v.canonical_name AS vendor,
+       o.ordered_at
+FROM line_items li
+JOIN orders o ON o.id = li.order_id
+LEFT JOIN vendors v ON v.id = o.vendor_id
+LEFT JOIN boat_systems bs ON bs.id = li.system_id
+WHERE li.relevance IS NULL OR li.relevance = 'ambiguous'
+   OR (li.relevance = 'boat' AND li.system_id IS NULL);

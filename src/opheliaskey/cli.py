@@ -12,9 +12,9 @@ from .analysis.demo import clear_demo, seed_demo
 from .analysis.reconcile import reconcile as run_reconcile
 from .analysis.risk import risk_report
 from .classify.rules import apply_rules
-from .classify.taxonomy import seed_systems
+from .classify.taxonomy import seed_systems, seed_vessel_meta
 from .config import get_settings
-from .db.database import connect, fmt_money
+from .db.database import connect, fmt_money, utcnow
 from .parsing.registry import parse_pending, reset_derived
 
 app = typer.Typer(
@@ -35,6 +35,7 @@ def _db():
     settings.ensure_dirs()
     db = connect()
     seed_systems(db)
+    seed_vessel_meta(db)
     return db
 
 
@@ -138,19 +139,106 @@ def parse(reparse: bool = typer.Option(False, help="Rebuild all derived data fro
 
 @app.command()
 def classify(
+    llm: bool = typer.Option(False, "--llm", help="Run the LLM pass over what rules could not place."),
     reclassify: bool = typer.Option(False, help="Re-run over already-classified items."),
     min_confidence: float = typer.Option(0.6, help="Confidence floor for auto-assignment."),
+    effort: str = typer.Option("medium", help="LLM effort: low | medium | high | xhigh | max."),
 ):
-    """Attribute line items to boat systems."""
+    """Attribute line items to boat systems, and decide boat vs personal."""
     db = _db()
     stats = apply_rules(db, min_confidence=min_confidence, reclassify=reclassify)
     console.print(
-        f"examined {stats['examined']}  ·  [green]classified {stats['classified']}[/]  ·  "
-        f"[yellow]ambiguous {stats['ambiguous']}[/]  ·  unmatched {stats['unmatched']}"
+        f"[bold]rules[/]  examined {stats['examined']}  ·  "
+        f"[green]{stats['relevance_boat']} boat[/] · {stats['relevance_personal']} personal · "
+        f"[yellow]{stats['relevance_deferred']} deferred[/]  ·  "
+        f"systems set {stats['system_set']}, ambiguous {stats['system_ambiguous']}, "
+        f"unmatched {stats['system_unmatched']}"
     )
-    if stats["ambiguous"] or stats["unmatched"]:
-        console.print("[dim]Unplaced items are left NULL rather than guessed. "
-                      "Review with: okey report unclassified[/]")
+
+    if llm:
+        from .classify.llm import apply_llm
+
+        try:
+            result = apply_llm(db, effort=effort)
+        except Exception as exc:
+            console.print(f"[red]LLM pass failed: {type(exc).__name__}: {exc}[/]")
+            raise typer.Exit(1)
+        console.print(
+            f"[bold]llm[/]    examined {result['examined']} in {result['batches']} batch(es)  ·  "
+            f"[green]{result['boat']} boat[/] · {result['personal']} personal · "
+            f"[yellow]{result['ambiguous']} ambiguous[/]  ·  "
+            f"systems set {result['systems_set']}  ·  "
+            f"[yellow]{result['needs_review']} need review[/]"
+        )
+        for err in result["errors"][:5]:
+            console.print(f"  [red]{err}[/]")
+    else:
+        pending = db.one("SELECT COUNT(*) n FROM v_review_queue")
+        if pending and pending["n"]:
+            console.print(
+                f"[dim]{pending['n']} items unresolved. Run `okey classify --llm` to "
+                f"classify them with vessel context, then `okey review`.[/]"
+            )
+
+
+@app.command()
+def review(
+    limit: int = typer.Option(30, help="How many items to show."),
+    item: int = typer.Option(0, "--item", help="Line item id to set."),
+    mark: str = typer.Option("", "--mark", help="boat | personal (with --item)."),
+    system: str = typer.Option("", "--system", help="System key to assign (with --item)."),
+):
+    """Show or clear the human review queue.
+
+    Manual verdicts are final: neither the rules nor the LLM will overwrite them.
+    """
+    db = _db()
+
+    if item:
+        if mark not in ("boat", "personal", ""):
+            console.print("[red]--mark must be 'boat' or 'personal'[/]")
+            raise typer.Exit(1)
+        with db.tx():
+            if mark:
+                db.execute(
+                    """UPDATE line_items SET relevance=?, relevance_by='manual',
+                         relevance_conf=1.0 WHERE id=?""",
+                    (mark, item),
+                )
+            if system:
+                row = db.one("SELECT id FROM boat_systems WHERE key=?", (system,))
+                if row is None:
+                    console.print(f"[red]unknown system '{system}'[/]")
+                    raise typer.Exit(1)
+                db.execute(
+                    """UPDATE line_items SET system_id=?, classified_by='manual',
+                         classify_conf=1.0, classified_at=? WHERE id=?""",
+                    (row["id"], utcnow(), item),
+                )
+        console.print(f"[green]item {item} updated[/]")
+        return
+
+    rows = db.query("SELECT * FROM v_review_queue ORDER BY total_cents DESC LIMIT ?", (limit,))
+    if not rows:
+        console.print("[green]Review queue is empty.[/]")
+        return
+
+    total = db.one("SELECT COUNT(*) n, COALESCE(SUM(total_cents),0) amt FROM v_review_queue")
+    console.print(
+        f"[yellow]{total['n']} items awaiting review, {fmt_money(total['amt'])} at stake[/]\n"
+    )
+    table = Table("id", "item", "amount", "vendor", "call", "why")
+    for row in rows:
+        call = row["relevance"] or "—"
+        conf = f" {row['relevance_conf']:.2f}" if row["relevance_conf"] else ""
+        table.add_row(
+            str(row["id"]), row["description"][:46], fmt_money(row["total_cents"]),
+            (row["vendor"] or "—")[:16], f"{call}{conf}", (row["relevance_note"] or "")[:44],
+        )
+    console.print(table)
+    console.print(
+        "[dim]Set with: okey review --item <id> --mark boat --system electronics_nav[/]"
+    )
 
 
 @app.command()
@@ -173,13 +261,16 @@ def report_cost():
 
     console.print(
         Panel(
-            f"Net spend    [bold green]{fmt_money(t['net_cents'])}[/]\n"
-            f"Gross        {fmt_money(t['gross_cents'])}\n"
-            f"Refunded     {fmt_money(t['refunded_cents'])}\n"
-            f"Capital      {fmt_money(t['capital_cents'])}   "
+            f"Project spend  [bold green]{fmt_money(t['net_cents'])}[/]  "
+            f"({t['boat_item_count']} of {t['item_count']} line items)\n"
+            f"Refunded       {fmt_money(t['refunded_cents'])}\n"
+            f"Excluded       {fmt_money(t['personal_cents'])} personal\n"
+            f"Unreviewed     [yellow]{fmt_money(t['unreviewed_cents'])}[/] "
+            f"across {t['unreviewed_count']} items — could move the total either way\n"
+            f"Capital        {fmt_money(t['capital_cents'])}   "
             f"Consumable {fmt_money(t['consumable_cents'])}   "
             f"Unattributed [yellow]{fmt_money(t['unattributed_cents'])}[/]\n"
-            f"Burn rate    {fmt_money(report['monthly_burn_cents'])}/mo (trailing 3mo)",
+            f"Burn rate      {fmt_money(report['monthly_burn_cents'])}/mo (trailing 3mo)",
             title="Ophelia's Key — cost",
             border_style="cyan",
         )

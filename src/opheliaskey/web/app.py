@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..analysis.cost import cost_report
 from ..analysis.risk import risk_report
-from ..classify.taxonomy import seed_systems
+from ..classify.taxonomy import seed_systems, seed_vessel_meta
 from ..db.database import connect, fmt_money
 
 app = FastAPI(title="Ophelia's Key")
@@ -25,6 +25,7 @@ templates.env.filters["money"] = fmt_money
 def _db():
     db = connect()
     seed_systems(db)
+    seed_vessel_meta(db)
     return db
 
 
@@ -36,9 +37,11 @@ def dashboard(request: Request):
 
     months = cost["by_month"]
     peak = max((m["spend_cents"] for m in months), default=1) or 1
-    unclassified = db.query(
-        "SELECT description, total_cents, vendor FROM v_unclassified "
-        "ORDER BY total_cents DESC LIMIT 15"
+    review_queue = db.query(
+        "SELECT * FROM v_review_queue ORDER BY total_cents DESC LIMIT 20"
+    )
+    review_total = db.one(
+        "SELECT COUNT(*) n, COALESCE(SUM(total_cents),0) amt FROM v_review_queue"
     )
     return templates.TemplateResponse(
         request,
@@ -48,7 +51,8 @@ def dashboard(request: Request):
             "risk": risk,
             "months": months,
             "peak": peak,
-            "unclassified": unclassified,
+            "review_queue": review_queue,
+            "review_total": review_total,
         },
     )
 
