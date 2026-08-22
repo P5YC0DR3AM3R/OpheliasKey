@@ -1253,3 +1253,38 @@ def test_parser_preserves_document_provenance(db):
 
     row = db.one("SELECT source FROM orders WHERE external_order_id='111-0000000-0000001'")
     assert row["source"] == "amazon_csv"
+
+
+def test_raw_store_holds_source_values_not_derived_ones(tmp_path):
+    """A parser fix must be applicable by re-parsing. That only works if the
+    raw store holds what the source said — deriving totals at ingest time bakes
+    the bug into the raw document and `--reparse` cannot reach it."""
+    path = tmp_path / "Retail.OrderHistory.1.csv"
+    path.write_text(EXPORT_CSV)
+    order = read_orders(path)[0]
+    assert "totalAmount" not in order
+    assert "taxAmount" not in order
+
+
+def test_order_total_is_derived_at_parse_time(db, tmp_path):
+    """The parser, not the importer, sums the lines — so the sum can be fixed
+    without re-fetching."""
+    import json
+
+    from opheliaskey.parsing.registry import parse_pending
+
+    payload = json.dumps({
+        "orderId": "999-9999999-9999999", "orderDate": "2026-08-01T00:00:00Z",
+        "orderStatus": "closed",
+        "lineItems": [
+            {"productTitle": "A", "quantity": 1, "unitPrice": "10.00", "totalPrice": "10.70"},
+            {"productTitle": "B", "quantity": 2, "unitPrice": "5.00", "totalPrice": "10.70"},
+        ],
+    }).encode()
+    db.store_raw("amazon_csv", "999-9999999-9999999", payload)
+    parse_pending(db)
+
+    row = db.one("SELECT total_cents, tax_cents FROM orders WHERE external_order_id=?",
+                 ("999-9999999-9999999",))
+    assert row["total_cents"] == 2140          # summed from the lines
+    assert row["tax_cents"] is None            # line totals are already tax-inclusive

@@ -173,7 +173,8 @@ def line_item_coverage(db: Database, tolerance_cents: int = 100) -> list[dict]:
     per-system figure silently understates true spend — so it is surfaced as a
     finding rather than absorbed quietly."""
     row = db.one(
-        """SELECT COUNT(*) AS n, COALESCE(SUM(gap), 0) AS amt FROM (
+        """SELECT COUNT(*) AS n, COALESCE(SUM(ABS(gap)), 0) AS amt,
+                  COALESCE(SUM(gap), 0) AS signed FROM (
              SELECT o.total_cents
                     - COALESCE((SELECT SUM(li.total_cents) FROM line_items li
                                 WHERE li.order_id = o.id), 0)
@@ -190,9 +191,13 @@ def line_item_coverage(db: Database, tolerance_cents: int = 100) -> list[dict]:
         _finding(
             "medium",
             "coverage_gap",
-            f"{row['n']} order{'s are' if row['n'] != 1 else ' is'} not fully itemized",
-            "Order totals exceed the sum of their line items, tax and shipping. "
-            "System-level spend is understated by this amount.",
+            f"{row['n']} order{'s do' if row['n'] != 1 else ' does'} not reconcile "
+            f"to their line items",
+            ("Order totals exceed their line items, tax and shipping, so system-level "
+             "spend is understated by this amount."
+             if row["signed"] > 0 else
+             "Line items exceed their order totals, so system-level spend is "
+             "overstated by this amount — usually tax counted twice."),
             row["amt"],
         )
     ]

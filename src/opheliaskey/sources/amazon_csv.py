@@ -132,19 +132,11 @@ def read_orders(path: Path) -> list[dict]:
                 "subtotal": get("subtotal"),
             })
 
-    # The export has no order-total column, so the order total is the sum of
-    # its rows. Left unset when no row carried a figure, rather than zeroed.
-    from ..db.database import money
-
-    for order in orders.values():
-        totals = [money(i["totalPrice"]) for i in order["lineItems"]]
-        totals = [t for t in totals if t is not None]
-        if totals:
-            order["totalAmount"] = sum(totals) / 100
-        taxes = [money(i.get("unitTax")) for i in order["lineItems"]]
-        taxes = [t for t in taxes if t is not None]
-        if taxes:
-            order["taxAmount"] = sum(taxes) / 100
+    # Nothing is derived here. The raw store must hold what the source said,
+    # not what this module computed from it — otherwise a parser fix cannot be
+    # applied by re-parsing, which is the whole reason raw documents are kept.
+    # The parser sums the line totals to get the order total, and emits no
+    # order-level tax because "Total Amount" per line already includes it.
     return list(orders.values())
 
 
