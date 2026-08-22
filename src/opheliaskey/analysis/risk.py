@@ -221,6 +221,32 @@ def unreviewed_spend(db: Database) -> list[dict]:
     ]
 
 
+def unpriced_invoices(db: Database) -> list[dict]:
+    """Invoice emails whose amount lives only in an attachment.
+
+    These are real project spend the parser cannot read. Counting them as
+    'not an order email' would file genuine expenditure under noise, so they
+    are surfaced for manual entry instead."""
+    rows = db.query(
+        """SELECT COUNT(*) AS n FROM raw_documents
+           WHERE parse_error LIKE '%attachment%'"""
+    )
+    count = int(rows[0]["n"]) if rows else 0
+    if not count:
+        return []
+    return [
+        _finding(
+            "medium",
+            "unpriced_invoice",
+            f"{count} invoice email{'s' if count != 1 else ''} priced only in an attachment",
+            "The amount is inside a PDF, so the pipeline cannot read it. This is real "
+            "spend missing from every total until it is entered by hand. "
+            "List them with `okey report unpriced`.",
+            None,
+        )
+    ]
+
+
 def risk_report(db: Database) -> dict:
     findings = (
         budget_overruns(db)
@@ -231,6 +257,7 @@ def risk_report(db: Database) -> dict:
         + unclassified_spend(db)
         + line_item_coverage(db)
         + unreviewed_spend(db)
+        + unpriced_invoices(db)
     )
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 9), -(f["amount_cents"] or 0)))
 

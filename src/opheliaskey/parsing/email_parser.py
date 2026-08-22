@@ -30,8 +30,14 @@ JSONLD_RE = re.compile(
     r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
     re.I | re.S,
 )
+# Longest labels first, so 'Order Number: X' does not match on 'Order' and
+# then capture the word 'Number'. The lookahead requires a digit somewhere in
+# the token, which rules out capturing an English word under re.I.
 ORDER_NO_RE = re.compile(
-    r"(?:order|order\s*#|order\s+number|confirmation)[\s#:]*([A-Z0-9][A-Z0-9\-]{5,24})", re.I
+    r"(?:order\s+number|order\s*#|confirmation\s+number|confirmation|invoice|order)"
+    r"[\s#:]*"
+    r"((?=[A-Za-z0-9-]*\d)[A-Za-z0-9][A-Za-z0-9-]{4,24})",
+    re.I,
 )
 TOTAL_RE = re.compile(
     r"(?:order\s+total|grand\s+total|total\s+charged|total)[\s:]*\$?\s*([0-9][0-9,]*\.\d{2})", re.I
@@ -64,6 +70,64 @@ class ParsedOrder:
     status: str = "unknown"
     items: list[ParsedItem] = field(default_factory=list)
     method: str = "jsonld"
+
+
+# Quoted reply chains carry stale numbers from earlier in a negotiation — an
+# estimate that was later revised, a total that was corrected. Scanning them
+# with the heuristic regex reliably picks the wrong figure.
+QUOTE_MARKERS = (
+    re.compile(r"^\s*>", re.M),
+    re.compile(r"^\s*On .{5,120}\bwrote:\s*$", re.M | re.I),
+    re.compile(r"^\s*-+\s*Original Message\s*-+\s*$", re.M | re.I),
+    re.compile(r"^\s*From:.*\n(?:\s*Sent:.*\n)?\s*To:", re.M | re.I),
+)
+
+DOCUMENT_EXTENSIONS = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv")
+INVOICE_WORDS = re.compile(r"\b(invoice|estimate|quote|statement|receipt|bill)\b", re.I)
+
+
+def strip_quoted(text: str) -> str:
+    """Cut a message body at the first quoted-reply marker."""
+    earliest = len(text)
+    for pattern in QUOTE_MARKERS:
+        found = pattern.search(text)
+        if found and found.start() < earliest:
+            earliest = found.start()
+    return text[:earliest]
+
+
+def _attachments(msg: Message) -> list[str]:
+    names = []
+    for part in msg.walk():
+        name = part.get_filename()
+        if name:
+            try:
+                names.append(str(make_header(decode_header(name))))
+            except Exception:
+                names.append(str(name))
+    return names
+
+
+def unparsed_reason(raw: bytes) -> str:
+    """Explain why a message yielded no order.
+
+    An invoice whose amount lives only in a PDF attachment is not 'not an order
+    email' — it is real spend the pipeline cannot price. Saying so keeps it
+    visible instead of filing it under noise.
+    """
+    try:
+        msg = email.message_from_bytes(raw)
+    except Exception:
+        return "unreadable message"
+
+    subject = _header(msg, "Subject")
+    documents = [n for n in _attachments(msg)
+                 if n.lower().endswith(DOCUMENT_EXTENSIONS)]
+    if documents and INVOICE_WORDS.search(subject or ""):
+        return f"invoice amount is only in the attachment: {', '.join(documents[:3])}"
+    if documents:
+        return f"no amount in body; attachments present: {', '.join(documents[:3])}"
+    return "not an order email"
 
 
 def _header(msg: Message, name: str) -> str:
@@ -176,8 +240,13 @@ def _offer_items(order: dict) -> list[ParsedItem]:
     return items
 
 
-def parse_email(raw: bytes) -> ParsedOrder | None:
-    """Parse a raw RFC-822 message into an order, or None if it isn't one."""
+def parse_email(raw: bytes) -> list[ParsedOrder]:
+    """Parse a raw RFC-822 message into zero or more orders.
+
+    Returns a *list* because one email routinely carries several orders —
+    Amazon bundles multiple order numbers into a single confirmation, and
+    returning only the first silently drops the rest.
+    """
     msg = email.message_from_bytes(raw)
     html, text = _bodies(msg)
     sender = _header(msg, "From")
@@ -197,7 +266,21 @@ def parse_email(raw: bytes) -> ParsedOrder | None:
         except Exception:
             ordered_at = None
 
+    # --- path 0: vendor-specific parsers ---
+    # Amazon's plaintext part is structured, stable, and — unlike the generic
+    # paths — handles several orders in one message.
+    from .vendors.amazon_email import is_amazon, parse_amazon_text
+
+    if is_amazon(sender, domain):
+        body_text = text or TAG_RE.sub(" ", html)
+        amazon_orders = parse_amazon_text(
+            body_text, ordered_at=ordered_at, domain=domain or "amazon.com"
+        )
+        if amazon_orders:
+            return amazon_orders
+
     # --- path 1: structured markup ---
+    found: list[ParsedOrder] = []
     for node in extract_jsonld_orders(html):
         order_no = node.get("orderNumber") or node.get("confirmationNumber")
         if not order_no:
@@ -212,7 +295,7 @@ def parse_email(raw: bytes) -> ParsedOrder | None:
         items = _offer_items(node)
         if total is None and items:
             total = sum(i.total_cents for i in items)
-        return ParsedOrder(
+        found.append(ParsedOrder(
             external_order_id=str(order_no).strip(),
             vendor_name=merchant_name,
             vendor_domain=domain,
@@ -222,10 +305,12 @@ def parse_email(raw: bytes) -> ParsedOrder | None:
             status=str(node.get("orderStatus") or "unknown").split("/")[-1].lower(),
             items=items,
             method="jsonld",
-        )
+        ))
+    if found:
+        return found
 
     # --- path 2: heuristic fallback ---
-    body = text or TAG_RE.sub(" ", html)
+    body = strip_quoted(text or TAG_RE.sub(" ", html))
     body = re.sub(r"\s+", " ", body)
     subject = _header(msg, "Subject")
     haystack = f"{subject} {body}"
@@ -233,9 +318,9 @@ def parse_email(raw: bytes) -> ParsedOrder | None:
     order_match = ORDER_NO_RE.search(haystack)
     total_match = TOTAL_RE.search(haystack)
     if not (order_match and total_match):
-        return None
+        return []
 
-    return ParsedOrder(
+    return [ParsedOrder(
         external_order_id=order_match.group(1).strip(),
         vendor_name=None,
         vendor_domain=domain,
@@ -243,4 +328,4 @@ def parse_email(raw: bytes) -> ParsedOrder | None:
         total_cents=money(total_match.group(1)),
         items=[],
         method="heuristic",
-    )
+    )]

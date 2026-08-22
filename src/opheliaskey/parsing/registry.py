@@ -11,7 +11,7 @@ import json
 from typing import Callable
 
 from ..db.database import Database, money, utcnow
-from .email_parser import ParsedItem, ParsedOrder, parse_email
+from .email_parser import ParsedItem, ParsedOrder, parse_email, unparsed_reason
 from .vendors_util import resolve_vendor
 
 
@@ -68,10 +68,12 @@ def persist_order(db: Database, source: str, parsed: ParsedOrder, raw_id: int) -
 
 
 def parse_gmail_row(db: Database, row) -> str | None:
-    parsed = parse_email(db.load_raw(row["id"]))
-    if parsed is None:
-        return "not an order email"
-    persist_order(db, "gmail", parsed, row["id"])
+    raw = db.load_raw(row["id"])
+    orders = parse_email(raw)
+    if not orders:
+        return unparsed_reason(raw)
+    for parsed in orders:
+        persist_order(db, "gmail", parsed, row["id"])
     return None
 
 

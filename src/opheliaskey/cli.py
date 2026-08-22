@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -99,6 +101,69 @@ def log_nights(
     )
     total = db.one("SELECT COALESCE(SUM(nights),0) n FROM usage_log")
     console.print(f"[green]logged {nights} nights[/] — {total['n']} total aboard")
+
+
+gmail_app = typer.Typer(help="Gmail connection setup.", no_args_is_help=True)
+app.add_typer(gmail_app, name="gmail")
+
+
+@gmail_app.command("setup")
+def gmail_setup():
+    """Check Gmail prerequisites and print exactly what is missing."""
+    from .sources.gmail import DEFAULT_QUERY, SCOPES
+
+    settings = get_settings()
+    secret = Path(settings.gmail_client_secret_file)
+    token = Path(settings.gmail_token_file)
+
+    table = Table("check", "status", "detail")
+    ok = True
+
+    if secret.exists():
+        table.add_row("OAuth client", "[green]found[/]", str(secret))
+    else:
+        ok = False
+        table.add_row("OAuth client", "[red]missing[/]", str(secret))
+
+    if token.exists():
+        table.add_row("Authorized token", "[green]found[/]", str(token))
+    else:
+        table.add_row("Authorized token", "[yellow]not yet[/]",
+                      "created on first `okey ingest gmail`")
+
+    try:
+        import googleapiclient  # noqa: F401
+        import google_auth_oauthlib  # noqa: F401
+        table.add_row("Python packages", "[green]installed[/]",
+                      "google-api-python-client, google-auth-oauthlib")
+    except ImportError:
+        ok = False
+        table.add_row("Python packages", "[red]missing[/]",
+                      "pip install google-api-python-client google-auth-oauthlib")
+
+    console.print(table)
+    console.print(f"\n[dim]scope:[/] {SCOPES[0]}")
+    console.print(f"[dim]since:[/] {settings.gmail_since}")
+    console.print(f"[dim]query:[/] {DEFAULT_QUERY[:110]}...")
+
+    if not ok:
+        console.print(
+            Panel(
+                "1. Open [cyan]console.cloud.google.com[/] and create (or pick) a project.\n"
+                "2. APIs & Services → Library → enable [cyan]Gmail API[/].\n"
+                "3. APIs & Services → OAuth consent screen → External → add your own\n"
+                "   address as a Test user. Staying in Testing mode is fine.\n"
+                "4. Credentials → Create credentials → OAuth client ID →\n"
+                "   Application type [cyan]Desktop app[/].\n"
+                f"5. Download the JSON and save it to:\n   [cyan]{secret}[/]\n"
+                "6. Run [cyan]okey ingest gmail --full[/]. A browser opens once for\n"
+                "   consent; the token is cached afterwards.\n\n"
+                "[dim]Read-only scope. Nothing is ever sent, deleted or modified.[/]",
+                title="Gmail setup — remaining steps", border_style="yellow",
+            )
+        )
+    else:
+        console.print("\n[green]Ready. Run `okey ingest gmail --full`.[/]")
 
 
 @app.command()
@@ -398,6 +463,28 @@ def report_risk():
         )
         for finding in report["spec_findings"][:3]:
             console.print(f"  [{palette[finding['severity']]}]●[/] {finding['title']}")
+
+
+@report_app.command("unpriced")
+def report_unpriced():
+    """Invoice emails whose amount is only inside an attachment."""
+    db = _db()
+    rows = db.query(
+        """SELECT external_id, occurred_at, parse_error FROM raw_documents
+           WHERE parse_error LIKE '%attachment%' ORDER BY occurred_at DESC"""
+    )
+    if not rows:
+        console.print("[green]No unpriced invoices.[/]")
+        return
+    console.print(
+        f"[yellow]{len(rows)} invoice email(s) the parser could not price.[/] "
+        "Enter these by hand — they are missing from every total.\n"
+    )
+    table = Table("date", "message", "why")
+    for row in rows:
+        table.add_row((row["occurred_at"] or "—")[:10], row["external_id"][:20],
+                      row["parse_error"][:64])
+    console.print(table)
 
 
 @report_app.command("reward")

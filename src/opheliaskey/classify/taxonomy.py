@@ -93,6 +93,9 @@ BOAT_SYSTEMS: list[tuple[str, str, int, int, str]] = [
 VESSEL_META: dict[str, str] = {
     "vessel_name": "Ophelia's Key",
     "vessel_type": "Pleasure craft with berths (liveaboard)",
+    "vessel_make_model": "1988 Cruisers Yachts Esprit 3370, white, express cruiser",
+    "vessel_condition": "Good (Georgia DOR T-22B inspection, July 2026)",
+    "acquisition": "Bill of sale, no prior title",
     "registration": "State of Montana permanent registration, Granite County",
     "registration_mark": "MT9740CA",
     "hin": "CRS7251BA888",
