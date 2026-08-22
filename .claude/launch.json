@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "opheliaskey-dashboard",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "uvicorn", "opheliaskey.web.app:app", "--port", "8317", "--app-dir", "src"],
+      "port": 8317
+    }
+  ]
+}
