@@ -1288,3 +1288,52 @@ def test_order_total_is_derived_at_parse_time(db, tmp_path):
                  ("999-9999999-9999999",))
     assert row["total_cents"] == 2140          # summed from the lines
     assert row["tax_cents"] is None            # line totals are already tax-inclusive
+
+
+# --- committed work ---------------------------------------------------------
+
+from opheliaskey.analysis.commitments import commitment_summary  # noqa: E402
+from opheliaskey.analysis.risk import committed_work  # noqa: E402
+
+
+def _commit(db, description, cents=None, ref=None, scheduled=None, status="open"):
+    db.execute(
+        """INSERT INTO commitments (description, estimate_cents, reference, scheduled_for,
+             status, created_at) VALUES (?,?,?,?,?,?)""",
+        (description, cents, ref, scheduled, status, utcnow()))
+
+
+def test_commitments_never_reach_spend(db):
+    """Committed work is not spend. It lives in its own table so it cannot leak
+    into a total by accident."""
+    from opheliaskey.analysis.cost import totals
+
+    _commit(db, "Exhaust install", cents=250000)
+    assert totals(db)["project_gross_cents"] == 0
+    assert commitment_summary(db)["estimated_cents"] == 250000
+
+
+def test_unknown_estimate_stays_null_not_zero(db):
+    """A commitment with no price is unpriced, not free — and the count of
+    unpriced items is reported so the estimate is not mistaken for the total."""
+    _commit(db, "Engine tune-up")
+    _commit(db, "Exhaust install", cents=250000)
+    summary = commitment_summary(db)
+    assert summary["count"] == 2
+    assert summary["estimated_cents"] == 250000
+    assert summary["unpriced_count"] == 1
+
+    finding = committed_work(db)[0]
+    assert "carry no estimate" in finding["detail"]
+
+
+def test_invoiced_commitments_drop_out(db):
+    _commit(db, "Done work", cents=100000, status="invoiced")
+    assert commitment_summary(db)["count"] == 0
+    assert committed_work(db) == []
+
+
+def test_next_scheduled_is_the_earliest_date(db):
+    _commit(db, "Later", scheduled="2026-09-10")
+    _commit(db, "Sooner", scheduled="2026-08-25")
+    assert commitment_summary(db)["next_scheduled"] == "2026-08-25"

@@ -234,6 +234,58 @@ def add_invoice(
     )
 
 
+@add_app.command("commitment")
+def add_commitment(
+    description: str = typer.Argument(..., help="What the work is."),
+    vendor: str = typer.Option("", "--vendor"),
+    system: str = typer.Option("", "--system", help="Boat system key."),
+    estimate: float = typer.Option(0.0, "--estimate", help="Estimated cost; omit if unknown."),
+    scheduled: str = typer.Option("", "--scheduled", help="YYYY-MM-DD."),
+    reference: str = typer.Option("", "--ref", help="Repair order or quote number."),
+    note: str = typer.Option("", "--note"),
+    vessel: str = typer.Option(VESSEL_DEFAULT, "--vessel"),
+):
+    """Record work that is authorized or scheduled but not yet invoiced.
+
+    Omit --estimate when the cost is genuinely unknown; it stays NULL rather
+    than becoming zero, and the reports say how many commitments are unpriced.
+    """
+    db = _db()
+    system_id = None
+    if system:
+        row = db.one("SELECT id FROM boat_systems WHERE key=?", (system,))
+        if row is None:
+            console.print(f"[red]unknown system '{system}'[/]")
+            raise typer.Exit(1)
+        system_id = row["id"]
+    vendor_id = resolve_vendor(db, name=vendor) if vendor else None
+
+    db.execute(
+        """INSERT OR IGNORE INTO commitments (vendor_id, system_id, description,
+             estimate_cents, scheduled_for, reference, vessel, note, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (vendor_id, system_id, description,
+         int(round(estimate * 100)) if estimate else None,
+         scheduled or None, reference or None, vessel, note or None, utcnow()),
+    )
+    console.print(
+        f"[green]committed[/] {description[:52]}"
+        + (f" — {fmt_money(int(round(estimate*100)))}" if estimate else " — [yellow]no estimate[/]")
+        + (f", scheduled {scheduled}" if scheduled else "")
+    )
+
+
+@add_app.command("invoiced")
+def commitment_invoiced(reference: str = typer.Argument(..., help="Commitment reference.")):
+    """Close a commitment once its invoice has been recorded."""
+    db = _db()
+    cur = db.execute("UPDATE commitments SET status='invoiced' WHERE reference=?", (reference,))
+    if cur.rowcount:
+        console.print(f"[green]closed {cur.rowcount} commitment(s) for {reference}[/]")
+    else:
+        console.print(f"[yellow]no open commitment with reference {reference}[/]")
+
+
 @app.command()
 def systems():
     """List boat system keys."""
@@ -623,6 +675,43 @@ def report_risk():
         )
         for finding in report["spec_findings"][:3]:
             console.print(f"  [{palette[finding['severity']]}]●[/] {finding['title']}")
+
+
+@report_app.command("commitments")
+def report_commitments():
+    """Work committed but not yet invoiced."""
+    from .analysis.commitments import commitment_summary
+
+    db = _db()
+    summary = commitment_summary(db)
+    if not summary["count"]:
+        console.print("[green]Nothing committed and unbilled.[/]")
+        return
+
+    header = (
+        f"Committed items      {summary['count']}\n"
+        f"Estimated            {fmt_money(summary['estimated_cents'])}"
+    )
+    if summary["unpriced_count"]:
+        header += (
+            f"\n[yellow]Without an estimate  {summary['unpriced_count']} — "
+            f"the real figure is higher[/]"
+        )
+    if summary["next_scheduled"]:
+        header += f"\nNext scheduled       {summary['next_scheduled']}"
+    console.print(Panel(header, title="Ophelia's Key — committed work",
+                        border_style="yellow"))
+
+    table = Table("scheduled", "vendor", "work", "system", "estimate", "ref")
+    for item in summary["items"]:
+        table.add_row(
+            item["scheduled_for"] or "—", (item["vendor"] or "—")[:16],
+            item["description"][:44], (item["system_name"] or "—")[:18],
+            fmt_money(item["estimate_cents"]) if item["estimate_cents"]
+            else "[yellow]unknown[/]",
+            item["reference"] or "—",
+        )
+    console.print(table)
 
 
 @report_app.command("duplicates")

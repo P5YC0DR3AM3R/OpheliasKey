@@ -303,6 +303,24 @@ okey systems          # list the system keys
 okey report unpriced  # invoices the parser found but could not price
 ```
 
+## Committed work
+
+Every other figure in this project is backward-looking. `okey add commitment`
+records work that is authorized or scheduled but not yet invoiced, which is the
+difference between *what has this cost* and *what will it cost*.
+
+```bash
+okey add commitment "Exhaust hose replacement" --vendor "Poseidon Marine" \
+    --system propulsion --scheduled 2026-08-25 --ref 1228
+okey report commitments
+okey add invoiced 1228        # close it once the invoice is recorded
+```
+
+Commitments live in their own table, so they can never leak into spend. Omit
+`--estimate` when the cost is genuinely unknown: it stays NULL rather than
+becoming zero, and every report states how many commitments are unpriced, so
+the estimate is never mistaken for the total.
+
 ## Tests
 
 ```bash

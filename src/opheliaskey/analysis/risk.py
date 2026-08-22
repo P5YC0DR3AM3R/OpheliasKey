@@ -365,6 +365,44 @@ def duplicate_orders(db: Database, window_days: int = 7) -> list[dict]:
     ]
 
 
+
+def committed_work(db: Database) -> list[dict]:
+    """Work authorized but not yet invoiced.
+
+    Every figure in this report is backward-looking. Committed work is the
+    part of the cost that is already decided and simply has not arrived yet,
+    and it is the difference between 'what has this cost' and 'what will it
+    cost'."""
+    from .commitments import commitment_summary
+
+    summary = commitment_summary(db)
+    if not summary["count"]:
+        return []
+
+    detail = (
+        f"{summary['count']} item{'s' if summary['count'] != 1 else ''} authorized or "
+        f"scheduled and not yet billed."
+    )
+    if summary["unpriced_count"]:
+        detail += (
+            f" {summary['unpriced_count']} of them carry no estimate, so the true "
+            f"figure is higher than the amount shown."
+        )
+    if summary["next_scheduled"]:
+        detail += f" Next work scheduled {summary['next_scheduled']}."
+    detail += " List them with `okey report commitments`."
+
+    return [
+        _finding(
+            "medium" if summary["estimated_cents"] or summary["unpriced_count"] else "low",
+            "committed_not_billed",
+            "Work is committed but not yet invoiced",
+            detail,
+            summary["estimated_cents"] or None,
+        )
+    ]
+
+
 def risk_report(db: Database) -> dict:
     findings = (
         budget_overruns(db)
@@ -379,6 +417,7 @@ def risk_report(db: Database) -> dict:
         + refit_against_hull_value(db)
         + priceless_line_items(db)
         + duplicate_orders(db)
+        + committed_work(db)
     )
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 9), -(f["amount_cents"] or 0)))
 

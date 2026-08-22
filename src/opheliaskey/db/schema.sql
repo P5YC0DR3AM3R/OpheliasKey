@@ -272,3 +272,25 @@ CREATE TABLE IF NOT EXISTS usage_log (
     note       TEXT,
     logged_at  TEXT    NOT NULL
 );
+
+-- --- Layer 6: committed work ------------------------------------------------
+-- Work authorized or scheduled but not yet invoiced. Kept out of `orders` by
+-- construction so it can never leak into spend, while still answering the
+-- question spend alone cannot: what is this going to cost from here.
+
+CREATE TABLE IF NOT EXISTS commitments (
+    id             INTEGER PRIMARY KEY,
+    vendor_id      INTEGER REFERENCES vendors(id),
+    system_id      INTEGER REFERENCES boat_systems(id),
+    description    TEXT    NOT NULL,
+    estimate_cents INTEGER,               -- NULL = genuinely unknown, never 0
+    scheduled_for  TEXT,
+    reference      TEXT,
+    status         TEXT    NOT NULL DEFAULT 'open',  -- open | invoiced | cancelled
+    vessel         TEXT,
+    note           TEXT,
+    created_at     TEXT    NOT NULL,
+    UNIQUE (reference, description)
+);
+CREATE INDEX IF NOT EXISTS idx_commitments_open ON commitments (status)
+    WHERE status = 'open';
