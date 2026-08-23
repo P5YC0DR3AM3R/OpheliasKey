@@ -152,7 +152,10 @@ def parse_amazon_row(db: Database, row) -> str | None:
         items=items,
         method="amazon_api",
     )
-    persist_order(db, "amazon_business", parsed, row["id"])
+    # Use the document's own source. Both the Business API and the data export
+    # feed this parser, and hardcoding one of them destroys provenance — you
+    # could no longer tell which orders came from where.
+    persist_order(db, row["source"], parsed, row["id"])
     return None
 
 

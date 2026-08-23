@@ -28,10 +28,17 @@ COLUMNS: dict[str, tuple[str, ...]] = {
     "status": ("order status", "orderstatus"),
     "product": ("product name", "title", "item name"),
     "asin": ("asin", "asin/isbn"),
-    "quantity": ("quantity", "qty"),
+    # 'Original Quantity' is the current export's spelling.
+    "quantity": ("original quantity", "quantity", "qty"),
     "unit_price": ("unit price", "purchase price per unit", "per unit price"),
     "unit_tax": ("unit price tax", "item subtotal tax"),
-    "total_owed": ("total owed", "item total", "shipment item subtotal"),
+    # Order matters: 'Total Amount' is the true line total, after tax and
+    # discounts. 'Shipment Item Subtotal' is pre-tax and understates the line,
+    # so it is only a fallback.
+    "total_owed": ("total amount", "total owed", "item total"),
+    "subtotal": ("shipment item subtotal",),
+    "tax": ("shipment item subtotal tax",),
+    "discount": ("total discounts",),
     "shipping": ("shipping charge", "shipping charge total"),
     "currency": ("currency", "currency code"),
     "website": ("website",),
@@ -121,31 +128,29 @@ def read_orders(path: Path) -> list[dict]:
                 "unitPrice": get("unit_price"),
                 "totalPrice": get("total_owed"),
                 "unitTax": get("unit_tax"),
+                "discount": get("discount"),
+                "subtotal": get("subtotal"),
             })
 
-    # The export has no order-total column, so the order total is the sum of
-    # its rows. Left unset when no row carried a figure, rather than zeroed.
-    from ..db.database import money
-
-    for order in orders.values():
-        totals = [money(i["totalPrice"]) for i in order["lineItems"]]
-        totals = [t for t in totals if t is not None]
-        if totals:
-            order["totalAmount"] = sum(totals) / 100
-        taxes = [money(i.get("unitTax")) for i in order["lineItems"]]
-        taxes = [t for t in taxes if t is not None]
-        if taxes:
-            order["taxAmount"] = sum(taxes) / 100
+    # Nothing is derived here. The raw store must hold what the source said,
+    # not what this module computed from it — otherwise a parser fix cannot be
+    # applied by re-parsing, which is the whole reason raw documents are kept.
+    # The parser sums the line totals to get the order total, and emits no
+    # order-level tax because "Total Amount" per line already includes it.
     return list(orders.values())
 
 
 class AmazonCsvSource:
     name = "amazon_csv"
 
-    def __init__(self, directory: Path | str | None = None):
+    def __init__(self, directory: Path | str | None = None, since: str | None = None):
         from ..config import get_settings
 
         self.directory = Path(directory or get_settings().amazon_csv_dir)
+        # The export is the full account history. Scoping keeps years of
+        # unrelated purchases out of the review queue without discarding them
+        # from the file — re-run with a wider window to pull them in.
+        self.since = since
 
     def sync(self, db: Database, *, full: bool = False) -> SyncResult:
         result = SyncResult(source=self.name)
@@ -172,6 +177,9 @@ class AmazonCsvSource:
                 result.errors.append(f"{path.name}: {exc}")
                 continue
             for order in orders:
+                if self.since and (order.get("orderDate") or "") < self.since:
+                    result.skipped += 1
+                    continue
                 result.fetched += 1
                 _, is_new = db.store_raw(
                     self.name,
@@ -184,3 +192,93 @@ class AmazonCsvSource:
 
         db.set_sync_state(self.name, None, "ok", result.summary())
         return result
+
+
+# --- refunds ---------------------------------------------------------------
+
+REFUND_COLUMNS: dict[str, tuple[str, ...]] = {
+    "order_id": ("order id", "orderid"),
+    "amount": ("refund amount",),
+    "date": ("refund date", "creation date"),
+    "status": ("reversal status", "payment status"),
+    "reason": ("reversal reason",),
+    "quantity": ("quantity",),
+}
+
+
+def read_refunds(path: Path) -> list[dict]:
+    """Read the refund export. Refunds are real money back and net spend is
+    wrong without them."""
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames:
+            return []
+        seen = {_normalize(f): f for f in reader.fieldnames if f}
+        index = {}
+        for field, candidates in REFUND_COLUMNS.items():
+            for candidate in candidates:
+                if candidate in seen:
+                    index[field] = seen[candidate]
+                    break
+        if "order_id" not in index or "amount" not in index:
+            raise ValueError(f"{path.name} is not a recognizable refund export")
+
+        out = []
+        for row in reader:
+            def get(field):
+                col = index.get(field)
+                return _money_text(row.get(col)) if col else None
+            order_id, amount = get("order_id"), get("amount")
+            if not order_id or not amount:
+                continue
+            out.append({
+                "orderId": order_id, "amount": amount, "date": get("date"),
+                "status": (get("status") or "").lower(), "reason": get("reason"),
+            })
+        return out
+
+
+def import_refunds(db: Database, directory: Path | str) -> dict:
+    """Attach refunds to the orders they belong to."""
+    from ..db.database import money
+
+    directory = Path(directory)
+    files = [p for p in directory.rglob("*.csv") if "refund" in p.name.lower()]
+    stats = {"files": len(files), "read": 0, "linked": 0, "unmatched": 0, "amount_cents": 0}
+
+    for path in files:
+        try:
+            refunds = read_refunds(path)
+        except ValueError:
+            continue
+        with db.tx():
+            for refund in refunds:
+                stats["read"] += 1
+                order = db.one(
+                    "SELECT id FROM orders WHERE external_order_id=?", (refund["orderId"],)
+                )
+                if order is None:
+                    # A refund for an order outside the ingested range. Counting
+                    # it would credit spend that was never recorded.
+                    stats["unmatched"] += 1
+                    continue
+                cents = money(refund["amount"])
+                if cents is None:
+                    continue
+                existing = db.one(
+                    """SELECT id FROM refunds WHERE order_id=? AND amount_cents=?
+                       AND COALESCE(occurred_at,'')=?""",
+                    (order["id"], cents, refund["date"] or ""),
+                )
+                if existing:
+                    continue
+                db.execute(
+                    """INSERT INTO refunds (order_id, kind, amount_cents, occurred_at,
+                         status, reason) VALUES (?, 'refund', ?, ?, ?, ?)""",
+                    (order["id"], cents, refund["date"],
+                     "completed" if refund["status"] == "completed" else refund["status"],
+                     refund["reason"]),
+                )
+                stats["linked"] += 1
+                stats["amount_cents"] += cents
+    return stats

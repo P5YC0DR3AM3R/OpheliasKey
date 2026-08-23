@@ -503,6 +503,58 @@ def add_invoice(
     )
 
 
+@add_app.command("commitment")
+def add_commitment(
+    description: str = typer.Argument(..., help="What the work is."),
+    vendor: str = typer.Option("", "--vendor"),
+    system: str = typer.Option("", "--system", help="Boat system key."),
+    estimate: float = typer.Option(0.0, "--estimate", help="Estimated cost; omit if unknown."),
+    scheduled: str = typer.Option("", "--scheduled", help="YYYY-MM-DD."),
+    reference: str = typer.Option("", "--ref", help="Repair order or quote number."),
+    note: str = typer.Option("", "--note"),
+    vessel: str = typer.Option(VESSEL_DEFAULT, "--vessel"),
+):
+    """Record work that is authorized or scheduled but not yet invoiced.
+
+    Omit --estimate when the cost is genuinely unknown; it stays NULL rather
+    than becoming zero, and the reports say how many commitments are unpriced.
+    """
+    db = _db()
+    system_id = None
+    if system:
+        row = db.one("SELECT id FROM boat_systems WHERE key=?", (system,))
+        if row is None:
+            console.print(f"[red]unknown system '{system}'[/]")
+            raise typer.Exit(1)
+        system_id = row["id"]
+    vendor_id = resolve_vendor(db, name=vendor) if vendor else None
+
+    db.execute(
+        """INSERT OR IGNORE INTO commitments (vendor_id, system_id, description,
+             estimate_cents, scheduled_for, reference, vessel, note, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (vendor_id, system_id, description,
+         int(round(estimate * 100)) if estimate else None,
+         scheduled or None, reference or None, vessel, note or None, utcnow()),
+    )
+    console.print(
+        f"[green]committed[/] {description[:52]}"
+        + (f" — {fmt_money(int(round(estimate*100)))}" if estimate else " — [yellow]no estimate[/]")
+        + (f", scheduled {scheduled}" if scheduled else "")
+    )
+
+
+@add_app.command("invoiced")
+def commitment_invoiced(reference: str = typer.Argument(..., help="Commitment reference.")):
+    """Close a commitment once its invoice has been recorded."""
+    db = _db()
+    cur = db.execute("UPDATE commitments SET status='invoiced' WHERE reference=?", (reference,))
+    if cur.rowcount:
+        console.print(f"[green]closed {cur.rowcount} commitment(s) for {reference}[/]")
+    else:
+        console.print(f"[yellow]no open commitment with reference {reference}[/]")
+
+
 @app.command()
 def systems():
     """List boat system keys."""
@@ -640,17 +692,26 @@ def ingest_amazon(full: bool = typer.Option(False, help="Re-scan from the projec
 @ingest_app.command("amazon-csv")
 def ingest_amazon_csv(
     directory: str = typer.Option("", "--dir", help="Folder holding the Amazon export."),
+    since: str = typer.Option("", "--since", help="Only orders on/after YYYY-MM-DD."),
 ):
     """Import the Amazon 'Request My Data' order-history export.
 
     This path needs no API approval. Unzip the export anywhere under the
     configured folder and point this at it.
     """
-    from .sources.amazon_csv import AmazonCsvSource
+    from .sources.amazon_csv import AmazonCsvSource, import_refunds
 
     db = _db()
-    source = AmazonCsvSource(directory or None)
+    source = AmazonCsvSource(directory or None, since=since or None)
     result = source.sync(db)
+    refunds = import_refunds(db, source.directory)
+    if refunds["read"]:
+        console.print(
+            f"[green]refunds: {refunds['linked']} linked "
+            f"({fmt_money(refunds['amount_cents'])})[/]"
+            + (f", {refunds['unmatched']} for orders outside this export"
+               if refunds["unmatched"] else "")
+        )
     if result.errors:
         for err in result.errors:
             console.print(f"[red]{err}[/]")
@@ -883,6 +944,84 @@ def report_risk():
         )
         for finding in report["spec_findings"][:3]:
             console.print(f"  [{palette[finding['severity']]}]●[/] {finding['title']}")
+
+
+@report_app.command("commitments")
+def report_commitments():
+    """Work committed but not yet invoiced."""
+    from .analysis.commitments import commitment_summary
+
+    db = _db()
+    summary = commitment_summary(db)
+    if not summary["count"]:
+        console.print("[green]Nothing committed and unbilled.[/]")
+        return
+
+    header = f"Committed items      {summary['count']}"
+    if summary["priced_count"]:
+        header += (
+            f"\nEstimated            {fmt_money(summary['estimated_cents'])}"
+            f"  [dim](from {summary['priced_count']} of {summary['count']} items)[/]"
+        )
+    if summary["unpriced_count"] == summary["count"]:
+        header += (
+            "\n[yellow]Estimated            unknown — none of these are quoted yet[/]"
+        )
+    elif summary["unpriced_count"]:
+        header += (
+            f"\n[yellow]Without an estimate  {summary['unpriced_count']} — "
+            f"the real figure is higher[/]"
+        )
+    if summary["next_scheduled"]:
+        header += f"\nNext scheduled       {summary['next_scheduled']}"
+    console.print(Panel(header, title="Ophelia's Key — committed work",
+                        border_style="yellow"))
+
+    table = Table("scheduled", "vendor", "work", "system", "estimate", "ref")
+    for item in summary["items"]:
+        table.add_row(
+            item["scheduled_for"] or "—", (item["vendor"] or "—")[:16],
+            item["description"][:44], (item["system_name"] or "—")[:18],
+            fmt_money(item["estimate_cents"]) if item["estimate_cents"]
+            else "[yellow]unknown[/]",
+            item["reference"] or "—",
+        )
+    console.print(table)
+
+
+@report_app.command("duplicates")
+def report_duplicates(window: int = typer.Option(7, help="Days between orders.")):
+    """Identical orders close together — possible double charges."""
+    from .analysis.risk import duplicate_orders
+
+    db = _db()
+    if not duplicate_orders(db, window_days=window):
+        console.print("[green]No duplicate-looking orders.[/]")
+        return
+    rows = db.query(
+        """SELECT a.external_order_id fid, b.external_order_id sid, a.total_cents amt,
+                  a.ordered_at fat, b.ordered_at sat, v.canonical_name vendor
+           FROM orders a
+           JOIN orders b ON b.vendor_id=a.vendor_id AND b.total_cents=a.total_cents
+                        AND b.id > a.id
+                        AND julianday(b.ordered_at) - julianday(a.ordered_at) <= ?
+           LEFT JOIN vendors v ON v.id=a.vendor_id
+           WHERE a.status!='cancelled' AND b.status!='cancelled' AND a.total_cents > 0
+           ORDER BY a.total_cents DESC""", (window,))
+    table = Table("amount", "vendor", "first order", "second order", "gap")
+    for r in rows:
+        gap = ""
+        if r["fat"] and r["sat"]:
+            from datetime import datetime
+            d1 = datetime.fromisoformat(r["fat"].replace("Z", ""))
+            d2 = datetime.fromisoformat(r["sat"].replace("Z", ""))
+            gap = f"{(d2 - d1).days}d"
+        table.add_row(fmt_money(r["amt"]), r["vendor"] or "—",
+                      f'{r["fid"]}\n{(r["fat"] or "")[:10]}',
+                      f'{r["sid"]}\n{(r["sat"] or "")[:10]}', gap)
+    console.print(table)
+    console.print("[dim]Check your card statement; mark false positives with "
+                  "`okey review --item <id> --mark personal` or leave them.[/]")
 
 
 @report_app.command("priceless")

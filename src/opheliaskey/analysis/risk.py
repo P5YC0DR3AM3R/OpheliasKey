@@ -195,9 +195,10 @@ def line_item_coverage(db: Database, tolerance_cents: int = 100) -> list[dict]:
         _finding(
             "medium",
             "coverage_gap",
-            f"{row['n']} order{'s are' if row['n'] != 1 else ' is'} not fully itemized",
-            "Order totals exceed the sum of their line items, tax and shipping. "
-            "System-level spend is understated by this amount.",
+            f"{row['n']} order{'s do' if row['n'] != 1 else ' does'} not reconcile "
+            f"to their line items",
+            "Order totals exceed their line items, tax and shipping, so system-level "
+            "spend is understated by this amount.",
             row["amt"],
         )
     ]
@@ -326,6 +327,83 @@ def priceless_line_items(db: Database) -> list[dict]:
     ]
 
 
+def duplicate_orders(db: Database, window_days: int = 7) -> list[dict]:
+    """Same vendor, same amount, close together — a possible double charge.
+
+    Repeated payment failures produce re-orders of an identical basket, and the
+    cancelled attempt is not always emailed. Two identical amounts days apart
+    are either a genuine repeat purchase or money counted twice, and only the
+    owner can tell which."""
+    rows = db.query(
+        """SELECT a.external_order_id AS first_id, b.external_order_id AS second_id,
+                  a.total_cents, a.ordered_at AS first_at, b.ordered_at AS second_at,
+                  v.canonical_name AS vendor
+           FROM orders a
+           JOIN orders b ON b.vendor_id = a.vendor_id
+                        AND b.total_cents = a.total_cents
+                        AND b.id > a.id
+                        AND julianday(b.ordered_at) - julianday(a.ordered_at) <= ?
+           LEFT JOIN vendors v ON v.id = a.vendor_id
+           WHERE a.status != 'cancelled' AND b.status != 'cancelled'
+             AND a.total_cents > 0
+           ORDER BY a.total_cents DESC""",
+        (window_days,),
+    )
+    if not rows:
+        return []
+    exposure = sum(int(r["total_cents"]) for r in rows)
+    return [
+        _finding(
+            "medium",
+            "possible_duplicate_order",
+            f"{len(rows)} pair{'s' if len(rows) != 1 else ''} of identical orders "
+            f"within {window_days} days",
+            "Same vendor, same amount, days apart. Either a genuine repeat purchase or "
+            "the same basket counted twice after a payment failure. List them with "
+            "`okey report duplicates`.",
+            exposure,
+        )
+    ]
+
+
+
+def committed_work(db: Database) -> list[dict]:
+    """Work authorized but not yet invoiced.
+
+    Every figure in this report is backward-looking. Committed work is the
+    part of the cost that is already decided and simply has not arrived yet,
+    and it is the difference between 'what has this cost' and 'what will it
+    cost'."""
+    from .commitments import commitment_summary
+
+    summary = commitment_summary(db)
+    if not summary["count"]:
+        return []
+
+    detail = (
+        f"{summary['count']} item{'s' if summary['count'] != 1 else ''} authorized or "
+        f"scheduled and not yet billed."
+    )
+    if summary["unpriced_count"]:
+        detail += (
+            f" {summary['unpriced_count']} of them carry no estimate, so the true "
+            f"figure is higher than the amount shown."
+        )
+    if summary["next_scheduled"]:
+        detail += f" Next work scheduled {summary['next_scheduled']}."
+    detail += " List them with `okey report commitments`."
+
+    return [
+        _finding(
+            "medium" if summary["estimated_cents"] or summary["unpriced_count"] else "low",
+            "committed_not_billed",
+            "Work is committed but not yet invoiced",
+            detail,
+            summary["estimated_cents"] or None,
+        )
+    ]
+
+
 def risk_report(db: Database) -> dict:
     findings = (
         budget_overruns(db)
@@ -339,6 +417,8 @@ def risk_report(db: Database) -> dict:
         + unpriced_invoices(db)
         + refit_against_hull_value(db)
         + priceless_line_items(db)
+        + duplicate_orders(db)
+        + committed_work(db)
     )
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f["severity"], 9), -(f["amount_cents"] or 0)))
 

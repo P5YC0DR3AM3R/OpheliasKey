@@ -208,7 +208,7 @@ def test_items_exceeding_the_total_are_not_a_coverage_gap(db):
     _make_order(db, total=100000, items=[40000, 20000])     # a real $400 shortfall
     findings = line_item_coverage(db)
     assert len(findings) == 1 and findings[0]["amount_cents"] == 40000
-    assert "1 order is" in findings[0]["title"]
+    assert "1 order does not reconcile" in findings[0]["title"]
 
 
 def test_unclassified_spend_counts_only_boat_items(db):
@@ -1097,3 +1097,108 @@ def test_priceless_items_are_reported(db):
     findings = priceless_line_items(db)
     assert len(findings) == 1
     assert "1 line item has no recorded price" in findings[0]["title"]
+
+
+def test_parser_preserves_document_provenance(db):
+    """Both the Business API and the data export feed the Amazon parser.
+    Hardcoding one source makes it impossible to tell where an order came
+    from."""
+    import json
+
+    from opheliaskey.parsing.registry import parse_pending
+
+    payload = json.dumps({
+        "orderId": "111-0000000-0000001", "orderDate": "2026-08-01T00:00:00Z",
+        "orderStatus": "closed", "totalAmount": 25.02,
+        "lineItems": [{"productTitle": "Widget", "quantity": 1,
+                       "unitPrice": "11.69", "totalPrice": "25.02"}],
+    }).encode()
+    db.store_raw("amazon_csv", "111-0000000-0000001", payload)
+    parse_pending(db)
+
+    row = db.one("SELECT source FROM orders WHERE external_order_id='111-0000000-0000001'")
+    assert row["source"] == "amazon_csv"
+
+
+def test_raw_store_holds_source_values_not_derived_ones(tmp_path):
+    """A parser fix must be applicable by re-parsing. That only works if the
+    raw store holds what the source said — deriving totals at ingest time bakes
+    the bug into the raw document and `--reparse` cannot reach it."""
+    path = tmp_path / "Retail.OrderHistory.1.csv"
+    path.write_text(EXPORT_CSV)
+    order = read_orders(path)[0]
+    assert "totalAmount" not in order
+    assert "taxAmount" not in order
+
+
+def test_order_total_is_derived_at_parse_time(db, tmp_path):
+    """The parser, not the importer, sums the lines — so the sum can be fixed
+    without re-fetching."""
+    import json
+
+    from opheliaskey.parsing.registry import parse_pending
+
+    payload = json.dumps({
+        "orderId": "999-9999999-9999999", "orderDate": "2026-08-01T00:00:00Z",
+        "orderStatus": "closed",
+        "lineItems": [
+            {"productTitle": "A", "quantity": 1, "unitPrice": "10.00", "totalPrice": "10.70"},
+            {"productTitle": "B", "quantity": 2, "unitPrice": "5.00", "totalPrice": "10.70"},
+        ],
+    }).encode()
+    db.store_raw("amazon_csv", "999-9999999-9999999", payload)
+    parse_pending(db)
+
+    row = db.one("SELECT total_cents, tax_cents FROM orders WHERE external_order_id=?",
+                 ("999-9999999-9999999",))
+    assert row["total_cents"] == 2140          # summed from the lines
+    assert row["tax_cents"] is None            # line totals are already tax-inclusive
+
+
+# --- committed work ---------------------------------------------------------
+
+from opheliaskey.analysis.commitments import commitment_summary  # noqa: E402
+from opheliaskey.analysis.risk import committed_work  # noqa: E402
+
+
+def _commit(db, description, cents=None, ref=None, scheduled=None, status="open"):
+    db.execute(
+        """INSERT INTO commitments (description, estimate_cents, reference, scheduled_for,
+             status, created_at) VALUES (?,?,?,?,?,?)""",
+        (description, cents, ref, scheduled, status, utcnow()))
+
+
+def test_commitments_never_reach_spend(db):
+    """Committed work is not spend. It lives in its own table so it cannot leak
+    into a total by accident."""
+    from opheliaskey.analysis.cost import totals
+
+    _commit(db, "Exhaust install", cents=250000)
+    assert totals(db)["project_gross_cents"] == 0
+    assert commitment_summary(db)["estimated_cents"] == 250000
+
+
+def test_unknown_estimate_stays_null_not_zero(db):
+    """A commitment with no price is unpriced, not free — and the count of
+    unpriced items is reported so the estimate is not mistaken for the total."""
+    _commit(db, "Engine tune-up")
+    _commit(db, "Exhaust install", cents=250000)
+    summary = commitment_summary(db)
+    assert summary["count"] == 2
+    assert summary["estimated_cents"] == 250000
+    assert summary["unpriced_count"] == 1
+
+    finding = committed_work(db)[0]
+    assert "carry no estimate" in finding["detail"]
+
+
+def test_invoiced_commitments_drop_out(db):
+    _commit(db, "Done work", cents=100000, status="invoiced")
+    assert commitment_summary(db)["count"] == 0
+    assert committed_work(db) == []
+
+
+def test_next_scheduled_is_the_earliest_date(db):
+    _commit(db, "Later", scheduled="2026-09-10")
+    _commit(db, "Sooner", scheduled="2026-08-25")
+    assert commitment_summary(db)["next_scheduled"] == "2026-08-25"
