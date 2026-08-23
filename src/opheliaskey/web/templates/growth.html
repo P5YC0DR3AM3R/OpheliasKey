@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyric Show Growth</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050a12'/%3E%3Cpath d='M4 21h20l4-6H6z' fill='none' stroke='%234fe3ff' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='10' r='2.4' fill='%23ffb347'/%3E%3Cpath d='M2 25h28' stroke='%234fe3ff' stroke-opacity='.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+{% raw %}
+<style>
+  /* One storyline, top to bottom: are we on track → who puts it in front of people →
+     how they become subscribers → what it earns. Same bridge-console identity as the
+     full working; far fewer things on screen. */
+  :root {
+    color-scheme: dark;
+    --ground: #050a12; --surface: #0b1420; --surface-2: #0f1b2b; --line: #17263a; --line-2: #1f3249;
+    --ink: #dbe8f5; --ink-2: #a9bbcf; --dim: #7f95ad; --mute: #4d6178;
+    --holo: #4fe3ff; --holo-soft: rgba(79,227,255,.14); --holo-line: rgba(79,227,255,.55);
+    --warm: #ffb347;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+    --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --crit: #d03b3b;
+    --display: "Chakra Petch", "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased;
+    background-image: radial-gradient(1200px 600px at 50% -10%, rgba(79,227,255,.07), transparent 60%),
+      linear-gradient(rgba(79,227,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(79,227,255,.035) 1px, transparent 1px);
+    background-size: auto, 48px 48px, 48px 48px; }
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px); mix-blend-mode: screen; }
+  a { color: var(--holo); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font: 12.5px var(--mono); background: var(--surface-2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 3px; color: var(--ink-2); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 22px 80px; }
+
+  .mast { display: grid; grid-template-columns: 1fr auto; gap: 18px 28px; align-items: end; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+  @media (max-width: 700px) { .mast { grid-template-columns: 1fr; } .hud { align-items: flex-start; } .chips { justify-content: flex-start; } }
+  .eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); margin-bottom: 10px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .eyebrow b { color: var(--holo); font-weight: 500; }
+  h1 { font: 700 clamp(26px, 4vw, 38px)/1.05 var(--display); letter-spacing: .01em; margin: 0 0 8px; text-transform: uppercase; text-wrap: balance; }
+  h1 span { color: var(--holo); text-shadow: 0 0 18px rgba(79,227,255,.45); }
+  .sub { color: var(--ink-2); max-width: 64ch; margin: 0; }
+  .hud { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; font: 500 12px/1.2 var(--mono); color: var(--dim); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 6px 9px; border: 1px solid var(--line-2); color: var(--ink-2); background: var(--surface); }
+  .chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); display: inline-block; }
+  .chip.holo { border-color: var(--holo-line); color: var(--holo); } .chip.holo i { background: var(--holo); box-shadow: 0 0 8px var(--holo); }
+  .chip.warm { border-color: rgba(255,179,71,.5); color: var(--warm); } .chip.warm i { background: var(--warm); }
+  .chip.ok { border-color: rgba(12,163,12,.55); } .chip.ok i { background: var(--good); }
+  .chip.wn { border-color: rgba(250,178,25,.55); } .chip.wn i { background: var(--warn); }
+  button.chip { cursor: pointer; font-family: var(--mono); }
+  button.chip:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--holo); outline-offset: 2px; }
+
+  .stack { display: grid; gap: 14px; }
+  .plate { position: relative; background: var(--surface); border: 1px solid var(--line); padding: 18px 20px 20px;
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px); animation: boot .6s cubic-bezier(.2,.8,.2,1) both; }
+  .stack .plate:nth-child(2) { animation-delay: .08s } .stack .plate:nth-child(3) { animation-delay: .16s } .stack .plate:nth-child(4) { animation-delay: .24s } .stack .plate:nth-child(n+5) { animation-delay: .32s }
+  .plate::before, .plate::after { content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none; border-color: var(--holo-line); border-style: solid; }
+  .plate::before { top: -1px; right: -1px; border-width: 1px 1px 0 0; } .plate::after { bottom: -1px; left: -1px; border-width: 0 0 1px 1px; }
+  .ph { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .ph h2 { margin: 0; font: 600 13px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--holo); }
+  .ph h2::before { content: attr(data-n) "  "; color: var(--mute); }
+  .ph .note { font: 400 12.5px/1.4 var(--sans); color: var(--dim); }
+  .two { display: grid; grid-template-columns: 1.1fr 1fr; gap: 18px 28px; align-items: start; }
+  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+  .big { font: 600 52px/1 var(--sans); color: var(--ink); letter-spacing: -.01em; margin: 6px 0 2px; }
+  .big.ok { color: var(--good); } .big.short { color: var(--warn); }
+  .big small { font: 500 14px var(--mono); color: var(--dim); letter-spacing: .04em; margin-left: 10px; }
+  .lead { font-size: 15px; color: var(--ink); line-height: 1.55; margin: 8px 0 0; max-width: 70ch; }
+  .lead b { color: var(--holo); font-weight: 600; }
+  .meta { font-size: 12.5px; color: var(--dim); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; margin-top: 10px; }
+  .kv dt { color: var(--dim); font: 500 11px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+  .kv dd { margin: 0; color: var(--ink-2); }
+
+  /* levers live inside the section they change */
+  .levers { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px 16px; margin-top: 12px; }
+  .ctl label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font: 500 11px/1.25 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .ctl output { font: 600 16px/1 var(--sans); color: var(--ink); }
+  .ctl input[type=range] { width: 100%; margin: 8px 0 2px; accent-color: var(--holo); height: 22px; }
+  .src { font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+  .src.observed { color: var(--good); } .src.override { color: var(--warm); } .src.meta { color: var(--holo); }
+  details.more { margin-top: 10px; } details.more summary { cursor: pointer; font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+
+  /* sources */
+  .sources { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 6px; }
+  @media (max-width: 980px) { .sources { grid-template-columns: repeat(2, 1fr); } } @media (max-width: 560px) { .sources { grid-template-columns: 1fr; } }
+  .source { background: var(--surface-2); border-top: 2px solid var(--holo); padding: 12px 13px 13px; display: grid; gap: 6px; align-content: start; }
+  .source.off { border-top-color: var(--line-2); opacity: .7; }
+  .source .t { font: 600 14px var(--sans); color: var(--ink); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .source .n { font: 600 28px/1.1 var(--sans); color: var(--ink); }
+  .source .n small { display: block; font: 500 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin-top: 2px; }
+  .pill { display: inline-block; font: 600 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: 2px 6px; border: 1px solid var(--line-2); color: var(--dim); }
+  .pill.committed { border-color: rgba(12,163,12,.55); color: var(--good); } .pill.hypothetical { border-color: var(--line-2); color: var(--dim); }
+  .pill.placeholder { border-color: var(--line-2); color: var(--dim); }
+  .notice { border-left: 3px solid var(--warn); background: var(--surface-2); padding: 9px 12px; font-size: 13px; color: var(--ink-2); margin-top: 12px; }
+
+  /* holographic flow */
+  .flow svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .fl { font: 500 11px var(--mono); fill: var(--ink-2); letter-spacing: .04em; } .fr { font: 400 10px var(--mono); fill: var(--dim); } .fn { font: 600 15px var(--sans); fill: var(--ink); }
+
+  /* funnel */
+  .funnel { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; gap: 10px; align-items: center; }
+  @media (max-width: 980px) { .funnel { grid-template-columns: 1fr 1fr; } .funnel .rate { display: none; } }
+  .stage { padding: 12px 14px 14px; background: var(--surface-2); border-left: 3px solid var(--holo); }
+  .stage .l { font: 500 11px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+  .stage .v { font: 600 30px/1.1 var(--sans); color: var(--ink); margin: 8px 0 2px; }
+  .stage .u { font-size: 12px; color: var(--dim); }
+  .rate { text-align: center; font: 500 11.5px/1.3 var(--mono); color: var(--dim); min-width: 72px; }
+  .rate b { display: block; font: 600 13px var(--sans); color: var(--ink); }
+
+  /* charts */
+  .chart { position: relative; }
+  .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .grid-line { stroke: var(--line); stroke-width: 1; } .axis-text { font: 400 11px var(--mono); fill: var(--dim); }
+  .ref-line { stroke: var(--ink-2); stroke-width: 1; opacity: .7; }
+  .ref-text { font: 500 10.5px var(--mono); fill: var(--ink-2); letter-spacing: .06em; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+  .series-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; } .series-area { opacity: .10; }
+  .end-label { font: 600 12px var(--sans); fill: var(--ink); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font: 500 12px var(--mono); color: var(--ink-2); margin: 4px 0 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; } .legend i { width: 18px; height: 2px; background: var(--s1); display: inline-block; } .legend i.ref { height: 1px; background: var(--ink-2); }
+  .donut { display: grid; grid-template-columns: 140px 1fr; gap: 14px; align-items: center; margin-top: 8px; }
+  .donut svg { width: 140px; height: 140px; display: block; } .donut .ctr { font: 600 17px var(--sans); fill: var(--ink); } .donut .ctr2 { font: 500 9.5px var(--mono); fill: var(--dim); letter-spacing: .1em; }
+  .dl { display: flex; flex-direction: column; gap: 7px; font-size: 13px; } .dl div { display: grid; grid-template-columns: 10px 1fr auto; gap: 9px; align-items: center; }
+  .dl i { width: 10px; height: 10px; display: inline-block; } .dl em { font-style: normal; color: var(--dim); font-size: 12px; } .dl b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  table.t { width: 100%; border-collapse: collapse; margin-top: 8px; font-variant-numeric: tabular-nums; font-size: 13px; }
+  table.t th, table.t td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  table.t th { font: 500 10.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+  .num { text-align: right !important; } .scroll { overflow-x: auto; }
+  footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dim); font-size: 12.5px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  @keyframes boot { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  body.still, body.still * { animation: none !important; transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+{% endraw %}
+</head>
+<body>
+<div class="wrap">
+  {% include "_nav.html" %}
+
+  <header class="mast">
+    <div>
+      <div class="eyebrow">
+        <span><b>Lyric Show</b> · growth from the floating studio</span>
+        <span>{{ vessel.name }} · {{ vessel.registration_mark }}</span>
+      </div>
+      <h1>Are we on track for <span id="h1Target">—</span>?</h1>
+      <p class="sub">This is what it takes to sell the live STT / translation OBS overlay and Conversation Mode for travelers:
+        stream and perform live while using the actual app, so the accessibility features are on screen for everyone
+        watching. The boat, a partner church and a partner artist put it in front of people; this page follows reach,
+        subscribers and revenue, and lets you change the numbers.</p>
+    </div>
+    <div class="hud">
+      <div class="chips">
+        <span class="chip holo" id="modeChip"><i></i><span>projection</span></span>
+        <span class="chip" id="baselineChip"><i></i><span>baseline · not entered</span></span>
+        <button class="chip" id="motionBtn" type="button" aria-pressed="false" title="Pause ambient motion"><i></i>motion on</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="stack">
+
+    <!-- 1 ─ are we on track -->
+    <section class="plate" aria-labelledby="h-track">
+      <div class="ph"><h2 id="h-track" data-n="01">Are we on track?</h2><span class="note" id="trackNote"></span></div>
+      <div class="two">
+        <div>
+          <div class="big" id="trackBig">—</div>
+          <p class="lead" id="trackLead"></p>
+          <dl class="kv" id="trackKv"></dl>
+          <div class="levers" id="leversTarget"></div>
+        </div>
+        <div class="chart" id="trackChart"></div>
+      </div>
+    </section>
+
+    <!-- 2 ─ reach -->
+    <section class="plate" aria-labelledby="h-reach">
+      <div class="ph"><h2 id="h-reach" data-n="02">Who puts the overlay in front of people</h2><span class="note" id="reachNote"></span></div>
+      <div class="flow" id="reachFlow"></div>
+      <div class="sources" id="sources"></div>
+      <div id="reachPlaceholder" hidden class="notice"></div>
+      <div class="meta" id="reachLangs" style="margin-top:10px"></div>
+    </section>
+
+    <!-- 3 ─ how people become subscribers -->
+    <section class="plate" aria-labelledby="h-funnel">
+      <div class="ph"><h2 id="h-funnel" data-n="03">How people become subscribers · each month</h2><span class="note">travelers buy Base + Conversation Mode; performers buy the streaming plans</span></div>
+      <div class="funnel" id="funnel"></div>
+      <div class="levers" id="leversRates"></div>
+      <details class="more" id="moreRates"><summary>more · performers' rates and cancellations</summary><div class="levers" id="leversMore"></div></details>
+    </section>
+
+    <!-- 4 ─ what it earns -->
+    <section class="plate" aria-labelledby="h-earn">
+      <div class="ph"><h2 id="h-earn" data-n="04">What it earns</h2><span class="note">after the app-store cut · <span id="horizonNote"></span></span></div>
+      <div class="two">
+        <div>
+          <div class="big" id="earnBig">—</div>
+          <p class="lead" id="earnLead"></p>
+          <div class="legend"><span><i></i>Net revenue a month</span><span><i class="ref"></i>Slip fee</span></div>
+          <div class="chart" id="earnChart"></div>
+        </div>
+        <div>
+          <div class="meta">Which plan they buy · new subscribers a month</div>
+          <div class="donut" id="donut"></div>
+          <dl class="kv" id="earnKv"></dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 ─ assumptions, folded -->
+    <section class="plate" aria-labelledby="h-ass">
+      <div class="ph"><h2 id="h-ass" data-n="05">Assumptions and data sources</h2></div>
+      <details>
+        <summary class="src" style="cursor:pointer">open · every rate on this page, with its basis and source</summary>
+        <p class="meta" style="margin:10px 0 6px">Tags: <span class="src">assumed</span> starting value · <span class="src observed">observed</span> from a logged show · <span class="src override">override</span> moved on this page · <span class="src meta">meta</span> saved value.
+          To record data: <code>okey log show --unique N --installs M</code> after a stream · <code>okey studio partner church --live-viewers N</code> · <code>okey studio baseline --subscribers N</code>.</p>
+        <div class="scroll"><table class="t" id="assumptions"></table></div>
+      </details>
+    </section>
+
+  </div>
+
+  <footer>
+    <span>A projection from the listed rates until shows are recorded. Prices from lyricshow.live (2026-08-22). {% if not standalone %}Boat, competition nights, power, Starlink and gear live in <a href="/studio/full">the full working</a>.{% endif %}</span>
+    <span>generated {{ generated_at }}</span>
+  </footer>
+</div>
+
+<script>window.__STUDIO__ = {{ report_json|safe }}; window.__STUDIO_LIVE__ = {{ 'false' if standalone else 'true' }};</script>
+{% if standalone %}<script>{{ model_js|safe }}</script>{% else %}<script src="/static/studio-model.js?v={{ asset_version }}"></script>{% endif %}
+{% raw %}
+<script>
+(function () {
+  'use strict';
+  const LIVE = window.__STUDIO_LIVE__;
+  const BASE = JSON.parse(JSON.stringify(window.__STUDIO__));
+  let R = window.__STUDIO__;
+  const computeFunnel = window.StudioModel.computeFunnel;
+  const $ = (s, el) => (el || document).querySelector(s);
+  const SVG = 'http://www.w3.org/2000/svg';
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const money = c => (c < 0 ? '-' : '') + '$' + Math.round(Math.abs(c) / 100).toLocaleString('en-US');
+  const moneyExact = c => (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const compact = c => { const d = c / 100; return d >= 1e6 ? '$' + (d / 1e6).toFixed(1) + 'M' : d >= 1e4 ? '$' + (d / 1e3).toFixed(1) + 'K' : money(c); };
+  const num = (n, dp) => Number(n).toLocaleString('en-US', { maximumFractionDigits: dp == null ? 0 : dp, minimumFractionDigits: 0 });
+  const pct = (f, dp) => (f * 100).toFixed(dp == null ? 0 : dp) + '%';
+  const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const k in attrs || {}) { if (k === 'class') e.className = attrs[k]; else if (k === 'html') e.innerHTML = attrs[k]; else e.setAttribute(k, attrs[k]); } kids.forEach(k => e.append(k)); return e; };
+  const svgEl = (tag, attrs, text) => { const e = document.createElementNS(SVG, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+  const esc = t => String(t).replace(/[&<>]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[ch]));
+  const tweens = new WeakMap();
+  function tweenText(node, to, fmt) {
+    const from = tweens.get(node) ?? to; tweens.set(node, to);
+    if (reduced || document.body.classList.contains('still') || from === to) { node.textContent = fmt(to); return; }
+    const t0 = performance.now(), dur = 520;
+    (function step(t) { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3); node.textContent = fmt(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); })(t0);
+  }
+  $('#motionBtn').addEventListener('click', e => { const b = e.currentTarget; const still = !document.body.classList.contains('still'); document.body.classList.toggle('still', still); b.setAttribute('aria-pressed', String(still)); b.lastChild.textContent = still ? 'motion off' : 'motion on'; const f = $('#reachFlow svg'); if (f) { try { still ? f.pauseAnimations() : f.unpauseAnimations(); } catch (x) {} } });
+
+  // ---------- levers ----------
+  // Each lever sits in the section it changes. Sources: assumed / observed / override / meta.
+  const L = {
+    target: [
+      { key: 'target_subscribers', label: 'target subscribers', min: 0, max: 20000, step: 100, fmt: v => num(v) },
+      { key: 'target_month', label: 'by month', min: 1, max: 36, step: 1, fmt: v => num(v) },
+    ],
+    boat: [
+      { key: 'viewers_per_show', label: 'people watching a boat show', min: 0, max: 5000, step: 10, fmt: v => num(v) },
+      { key: 'shows_per_month', label: 'boat shows a month', min: 0, max: 20, step: 1, fmt: v => num(v) },
+    ],
+    nights: [
+      { key: 'events_per_month', label: 'competition nights a month', min: 0, max: 8, step: 1, fmt: v => num(v) },
+      { key: 'dock_attendees_per_event', label: 'people on the dock a night', min: 0, max: 500, step: 5, fmt: v => num(v) },
+    ],
+    church: [
+      { key: 'partner_church_live_viewers', label: 'live viewers each Sunday', min: 0, max: 50000, step: 100, fmt: v => num(v) },
+    ],
+    artist: [
+      { key: 'partner_live_share', label: 'of his subscribers watching live', min: 0, max: 0.1, step: 'any', fmt: v => pct(v, 1) },
+    ],
+    rates: [
+      { key: 'traveler_share', label: 'viewers who are travelers', min: 0, max: 1, step: 'any', fmt: v => pct(v) },
+      { key: 'traveler_viewer_to_install', label: 'travelers who install', min: 0, max: 0.2, step: 'any', fmt: v => pct(v, 1) },
+      { key: 'traveler_install_to_paid', label: 'of those, who subscribe', min: 0, max: 0.6, step: 'any', fmt: v => pct(v) },
+    ],
+    more: [
+      { key: 'viewer_to_install', label: 'performers who install', min: 0, max: 0.2, step: 'any', fmt: v => pct(v, 1) },
+      { key: 'install_to_paid', label: 'of those, who subscribe', min: 0, max: 0.3, step: 'any', fmt: v => pct(v, 1) },
+      { key: 'traveler_monthly_churn', label: 'travelers cancelling each month', min: 0.01, max: 0.3, step: 'any', fmt: v => pct(v, 1) },
+      { key: 'monthly_churn', label: 'performers cancelling each month', min: 0.01, max: 0.3, step: 'any', fmt: v => pct(v, 1) },
+    ],
+  };
+  const TOGGLE = { key: 'partners_include_hypothetical', label: 'count the partner artist' };
+  const inputs = {};
+  Object.values(L).flat().forEach(c => { if (BASE.funnel.inputs[c.key]) inputs[c.key] = BASE.funnel.inputs[c.key].value; });
+  if (BASE.funnel.inputs[TOGGLE.key]) inputs[TOGGLE.key] = BASE.funnel.inputs[TOGGLE.key].value;
+  const srcFor = (k, v) => (v === BASE.funnel.inputs[k].value ? BASE.funnel.inputs[k].source : 'override');
+  const queryFor = () => { const qs = new URLSearchParams(); for (const k in inputs) qs.set(k, String(inputs[k])); return qs.toString(); };
+  let fetchTimer = null, generation = 0;
+
+  function lever(c) {
+    if (!(c.key in inputs)) return null;
+    const id = 'ctl_' + c.key;
+    const wrap = el('div', { class: 'ctl' });
+    const lab = el('label', { for: id }, el('span', {}, c.label), el('output', { id: id + '_out' }, c.fmt(inputs[c.key])));
+    const lo = Math.min(c.min, inputs[c.key]), hi = Math.max(c.max, inputs[c.key]);
+    const inp = el('input', { type: 'range', id, min: lo, max: hi, step: c.step, value: inputs[c.key] });
+    const src = el('div', { class: 'src ' + srcFor(c.key, inputs[c.key]), id: id + '_src' }, srcFor(c.key, inputs[c.key]));
+    inp.addEventListener('input', () => { inputs[c.key] = parseFloat(inp.value); $('#' + id + '_out').textContent = c.fmt(inputs[c.key]); const tag = srcFor(c.key, inputs[c.key]); src.textContent = tag; src.className = 'src ' + tag; recompute(); });
+    wrap.append(lab, inp, src); return wrap;
+  }
+  function mount(hostSel, list) { const host = $(hostSel); if (!host) return; host.innerHTML = ''; list.forEach(c => { const w = lever(c); if (w) host.append(w); }); }
+  function buildLevers() { mount('#leversTarget', L.target); mount('#leversRates', L.rates); mount('#leversMore', L.more); }
+
+  function recompute() {
+    R = merge(BASE, computeFunnel(BASE, inputs), inputs);
+    render();
+    const ex = $('#exportLink'); if (ex) ex.href = '/studio.html?' + queryFor();
+    if (!LIVE) return;
+    clearTimeout(fetchTimer);
+    const mine = ++generation;
+    fetchTimer = setTimeout(async () => {
+      const data = await fetch('/api/studio?' + queryFor()).then(r => r.ok ? r.json() : null).catch(() => null);
+      if (mine !== generation || !data) return;
+      R = data; render();
+    }, 260);
+  }
+  function merge(rep, m, inputs) {
+    const out = JSON.parse(JSON.stringify(rep));
+    out.funnel = { ...out.funnel, ...m.funnel, inputs: out.funnel.inputs };
+    for (const k in inputs) out.funnel.inputs[k] = { value: inputs[k], source: srcFor(k, inputs[k]) };
+    out.roi = { ...(out.roi || {}), ...m.roi }; out.reach = { ...(out.reach || {}), ...m.reach }; out.target = { ...(out.target || {}), ...m.target };
+    out.lenses.subscription = m.lenses.subscription; out.lenses.acquisition_displaced = m.lenses.acquisition_displaced; if (m.lenses.catalog) out.lenses.catalog = m.lenses.catalog;
+    out.breakeven = { ...out.breakeven, ...m.breakeven };
+    return out;
+  }
+
+  // ---------- 1 · on track ----------
+  function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; const s = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10; return s * p; }
+  function renderTrack() {
+    const t = R.target, rc = R.reach, f = R.funnel.monthly;
+    $('#h1Target').textContent = t && t.subscribers ? num(t.subscribers) + ' subscribers by month ' + t.month : 'growth';
+    const big = $('#trackBig'); big.className = 'big ' + (t.on_track ? 'ok' : 'short');
+    const at = t.subscribers_at_target_month;
+    big.innerHTML = ''; big.append(at == null ? '—' : num(at), el('small', {}, 'subscribers by month ' + t.month + ' · target ' + num(t.subscribers)));
+    $('#trackNote').textContent = t.on_track ? 'on track' : (t.shortfall != null ? num(t.shortfall) + ' short' : '');
+    const parts = [];
+    if (t.on_track) parts.push('<b>On track</b> at the current settings: ' + num(t.subscribers) + ' is reached in month ' + t.reached_month + '.');
+    else parts.push('<b>Short of the target</b> at the current settings. Reaching it needs about <b>' + num(t.required_new_paid_per_month) + ' new subscribers a month</b>, which at the current rates is roughly <b>' + num(t.required_viewers_per_month) + ' people</b> in front of the overlay each month. Current: ' + num(rc.viewers_total_per_month) + ' a month' + (t.reached_month ? ' — the target is reached in month ' + t.reached_month : ' — not reached within ' + R.breakeven.horizon_months + ' months') + '.');
+    if (rc.partners.some(p => !p.active)) parts.push('Include the partner artist below to see the effect of one large stream a month.');
+    $('#trackLead').innerHTML = parts.join(' ');
+    const kv = $('#trackKv'); kv.innerHTML = '';
+    [['people a month', num(rc.viewers_total_per_month)], ['new subscribers a month', num(f.new_paid, 1)], ['settles at', num(R.funnel.steady_state.subscribers) + ' subscribers']].forEach(([k, v]) => kv.append(el('dt', {}, k), el('dd', {}, v)));
+    // subscribers vs target
+    const host = $('#trackChart'); host.innerHTML = '';
+    const rows = R.funnel.trajectory.slice(0, Math.max(12, t.month)), W = 560, H = 230, m = { t: 16, r: 16, b: 28, l: 56 };
+    const yMax = niceMax(Math.max(t.subscribers || 0, ...rows.map(r => r.subscribers)) * 1.05);
+    const x = i => m.l + i / (rows.length - 1 || 1) * (W - m.l - m.r), y = v => m.t + (1 - v / yMax) * (H - m.t - m.b);
+    const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Subscribers by month against the target' });
+    for (let i = 0; i <= 4; i++) { const v = yMax * i / 4; svg.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: 'grid-line' })); svg.append(svgEl('text', { x: m.l - 8, y: y(v) + 4, class: 'axis-text', 'text-anchor': 'end' }, num(v))); }
+    rows.forEach((r, i) => { if (i % 3 === 0 || i === rows.length - 1) svg.append(svgEl('text', { x: x(i), y: H - 8, class: 'axis-text', 'text-anchor': 'middle' }, 'm' + r.month)); });
+    if (t.subscribers) { svg.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(t.subscribers), y2: y(t.subscribers), class: 'ref-line' })); svg.append(svgEl('text', { x: W - m.r, y: y(t.subscribers) - 5, class: 'ref-text', 'text-anchor': 'end' }, 'target ' + num(t.subscribers))); }
+    if (t.month <= rows.length) { const tx = x(t.month - 1); svg.append(svgEl('line', { x1: tx, x2: tx, y1: m.t, y2: H - m.b, class: 'ref-line', style: 'opacity:.45' })); svg.append(svgEl('text', { x: tx + 4, y: m.t + 10, class: 'ref-text' }, 'month ' + t.month)); }
+    const pts = rows.map((r, i) => [x(i), y(Math.min(r.subscribers, yMax))]);
+    const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    svg.append(svgEl('path', { d: d + ' L' + pts[pts.length - 1][0].toFixed(1) + ',' + y(0) + ' L' + pts[0][0].toFixed(1) + ',' + y(0) + ' Z', fill: 'var(--s1)', class: 'series-area' }));
+    svg.append(svgEl('path', { d, stroke: 'var(--s1)', class: 'series-line' }));
+    const last = pts[pts.length - 1]; svg.append(svgEl('circle', { cx: last[0], cy: last[1], r: 5, fill: 'var(--s1)', stroke: 'var(--surface)', 'stroke-width': 2 }));
+    svg.append(svgEl('text', { x: last[0] - 8, y: last[1] - 10, class: 'end-label', 'text-anchor': 'end' }, num(rows[rows.length - 1].subscribers)));
+    host.append(svg);
+  }
+
+  // ---------- 2 · reach ----------
+  function renderReach() {
+    const rc = R.reach, f = R.funnel.monthly, inp = R.funnel.inputs;
+    $('#reachNote').textContent = num(rc.viewers_total_per_month) + ' people a month · ' + num(rc.viewers_abroad_per_month) + ' outside the US';
+    // the flow: sources → overlay → people
+    const host = $('#reachFlow'); host.innerHTML = '';
+    const srcs = [
+      { name: 'Boat shows', n: f.viewers_stream, on: true },
+      { name: 'Competition nights', n: f.viewers_event, on: true, extra: '+ ' + num(f.attendees) + ' on the dock' },
+      ...rc.partners.map(p => ({ name: p.name, n: p.viewers_per_month, on: p.active })),
+    ];
+    const W = 1100, H = 70 + srcs.length * 44;
+    const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Where the people in front of the overlay come from' });
+    const ox = 620, oy = H / 2, px = 980;
+    srcs.forEach((s, i) => {
+      const yy = 40 + i * 44, on = s.on;
+      const path = svgEl('path', { d: 'M260,' + yy + ' C420,' + yy + ' 460,' + oy + ' ' + (ox - 22) + ',' + oy, fill: 'none', stroke: '#4fe3ff', 'stroke-opacity': on ? '.45' : '.12', 'stroke-width': on ? Math.max(1, Math.min(8, 1 + 7 * s.n / Math.max(1, rc.viewers_total_per_month))) : 1 });
+      svg.append(path);
+      if (on && !reduced && s.n > 0) { const c = svgEl('circle', { r: 3, fill: '#4fe3ff' }); const am = svgEl('animateMotion', { dur: (6 + i) + 's', begin: (-i * 1.3) + 's', repeatCount: 'indefinite', path: path.getAttribute('d') }); c.append(am); svg.append(c); }
+      svg.append(svgEl('circle', { cx: 250, cy: yy, r: 6, fill: on ? '#4fe3ff' : '#1f3249' }));
+      svg.append(svgEl('text', { x: 236, y: yy + 4, class: 'fl', 'text-anchor': 'end', style: on ? '' : 'opacity:.5' }, s.name));
+      svg.append(svgEl('text', { x: 236, y: yy + 18, class: 'fr', 'text-anchor': 'end', style: on ? '' : 'opacity:.5' }, on ? num(s.n) + ' / month' + (s.extra ? ' · ' + s.extra : '') : 'not counted'));
+    });
+    svg.append(svgEl('circle', { cx: ox, cy: oy, r: 24, fill: 'rgba(255,179,71,.12)', stroke: '#ffb347', 'stroke-opacity': '.7' }));
+    svg.append(svgEl('circle', { cx: ox, cy: oy, r: 7, fill: '#ffb347' }));
+    svg.append(svgEl('text', { x: ox, y: oy - 34, class: 'fl', 'text-anchor': 'middle', style: 'fill:#ffb347' }, 'Lyric Show on screen'));
+    svg.append(svgEl('text', { x: ox, y: oy + 44, class: 'fr', 'text-anchor': 'middle' }, 'live translation in the viewer\'s language · ' + rc.languages.total + ' languages'));
+    svg.append(svgEl('path', { d: 'M' + (ox + 24) + ',' + oy + ' L' + (px - 30) + ',' + oy, stroke: '#4fe3ff', 'stroke-opacity': '.45', 'stroke-width': 2 }));
+    svg.append(svgEl('circle', { cx: px, cy: oy, r: 24, fill: 'rgba(79,227,255,.10)', stroke: '#4fe3ff', 'stroke-opacity': '.6' }));
+    svg.append(svgEl('text', { x: px, y: oy + 5, class: 'fn', 'text-anchor': 'middle', id: 'flowPeople' }, num(rc.viewers_total_per_month)));
+    svg.append(svgEl('text', { x: px, y: oy + 42, class: 'fr', 'text-anchor': 'middle' }, 'people a month'));
+    host.append(svg);
+    // the four sources, each with its own levers
+    const sh = $('#sources'); sh.innerHTML = '';
+    const card = (title, pills, n, sub, levers, on) => {
+      const c = el('div', { class: 'source' + (on ? '' : ' off') });
+      const t = el('div', { class: 't' }, title); (pills || []).forEach(p => t.append(p)); c.append(t);
+      c.append(el('div', { class: 'n' }, num(n), el('small', {}, on ? 'people a month' : 'not counted')), el('div', { class: 'meta' }, sub));
+      (levers || []).forEach(x => { const w = lever(x); if (w) c.append(w); });
+      return c;
+    };
+    sh.append(card('Boat shows', [], f.viewers_stream, 'songwriters aboard, streamed with the overlay', L.boat, true));
+    sh.append(card('Competition nights', [], f.viewers_event, 'Paradise Busker rounds from the deck and dock · the dock crowd (' + num(f.attendees) + ') counts as travelers who saw the demo in person', L.nights, true));
+    rc.partners.forEach(p => {
+      const pills = [el('span', { class: 'pill ' + p.status }, p.status === 'committed' ? 'committed' : 'prospective')];
+      if (p.placeholder) pills.push(el('span', { class: 'pill placeholder' }, 'audience is an estimate'));
+      let levers = p.key === 'church' ? L.church : p.key === 'artist' ? L.artist : [];
+      const sub = p.kind === 'artist' ? num(p.subscribers) + ' subscribers · ' + p.streams_per_month + ' stream a month · ' + pct(p.international_share) + ' outside the US' : num(p.live_viewers_per_stream) + ' live viewers × ' + p.streams_per_month + ' Sundays · ' + pct(p.international_share) + ' outside the US';
+      const c = card(p.name, pills, p.viewers_per_month, sub, levers, p.active);
+      if (p.status !== 'committed') {
+        const on = (inputs[TOGGLE.key] || 0) >= 0.5;
+        const b = el('button', { class: 'chip' + (on ? ' holo' : ''), type: 'button', id: 'tgl_' + TOGGLE.key, 'aria-pressed': String(on), style: 'justify-self:start;margin-top:6px' }, el('i'), on ? 'included — click to exclude' : 'include the partner artist');
+        b.addEventListener('click', () => { inputs[TOGGLE.key] = on ? 0 : 1; recompute(); });
+        c.append(b);
+      }
+      sh.append(c);
+    });
+    const ph = rc.partners.filter(p => p.active && p.placeholder), warn = $('#reachPlaceholder');
+    if (ph.length) { warn.hidden = false; warn.textContent = ph.map(p => p.name).join(', ') + ': the audience figure is an estimate. Set the real number with the lever above or okey studio partner ' + ph[0].key + ' --live-viewers N.'; } else warn.hidden = true;
+    $('#reachLangs').textContent = (rc.note || '');
+  }
+
+  // ---------- 3 · funnel ----------
+  function renderFunnel() {
+    const f = R.funnel.monthly, ss = R.funnel.steady_state, inp = R.funnel.inputs;
+    const stages = [
+      ['People who watch', f.viewers, num(f.travelers_viewers) + ' travelers · ' + num(f.performers_viewers) + ' performers · plus ' + num(f.attendees) + ' on the dock'],
+      ['Install the app', f.installs, num(f.installs_travelers, 1) + ' travelers · ' + num(f.installs_performers, 1) + ' performers'],
+      ['Start paying', f.new_paid, num(f.new_paid_travelers, 1) + ' on Base + Conversation Mode · ' + num(f.new_paid_performers, 1) + ' on the streaming plans'],
+      ['Subscribers it settles at', ss.subscribers, num(ss.subscribers_travelers) + ' travelers · ' + num(ss.subscribers_performers, 1) + ' performers'],
+    ];
+    const rates = [pct(inp.traveler_viewer_to_install.value, 1) + ' travelers · ' + pct(inp.viewer_to_install.value, 1) + ' performers · ' + pct(inp.attendee_to_install.value) + ' dock', pct(inp.traveler_install_to_paid.value) + ' travelers · ' + pct(inp.install_to_paid.value, 1) + ' performers', 'stay ~' + (1 / inp.traveler_monthly_churn.value).toFixed(0) + ' months · ' + (1 / inp.monthly_churn.value).toFixed(0)];
+    const host = $('#funnel'); const fresh = !host.children.length;
+    stages.forEach((s, i) => {
+      let node = host.querySelector('[data-stage="' + i + '"]');
+      if (!node) { node = el('div', { class: 'stage', 'data-stage': i }, el('div', { class: 'l' }, s[0]), el('div', { class: 'v' }, '—'), el('div', { class: 'u' }, ''));
+        if (i > 0) { const r = el('div', { class: 'rate' }, el('b', {}, ''), el('span', {}, '')); r.dataset.rate = i - 1; host.append(r); }
+        host.append(node); }
+      tweenText(node.children[1], s[1], v => num(v, s[1] < 10 ? 1 : 0)); node.children[2].textContent = s[2];
+    });
+    host.querySelectorAll('.rate').forEach(r => { const i = +r.dataset.rate; r.firstChild.textContent = rates[i]; r.children[1].textContent = ['install', 'subscribe', 'months they stay'][i]; });
+  }
+
+  // ---------- 4 · earns ----------
+  const SLOT = { base: 'var(--s1)', base_broadcast: 'var(--s2)', ultimate: 'var(--s3)', traveler_bundle: 'var(--s4)' };
+  function renderEarn() {
+    const ss = R.funnel.steady_state, be = R.breakeven, rows = R.funnel.trajectory;
+    $('#horizonNote').textContent = rows.length + ' months';
+    tweenText($('#earnBig'), ss.mrr_net_cents, v => money(v) + ' a month');
+    $('#earnLead').innerHTML = 'Once it settles: <b>' + num(ss.subscribers) + ' subscribers</b> paying about ' + moneyExact(R.funnel.arpu_gross_cents) + ' a month each (' + pct(R.assumptions.annual_share.value) + ' on annual), ' + money(ss.arr_net_cents) + ' a year after Apple and Google take their cut. ' + (be.kit_month ? 'The studio gear (' + moneyExact(R.kit.planned_cents) + ') pays back in month ' + be.kit_month + '.' : '');
+    const host = $('#earnChart'); host.innerHTML = '';
+    const W = 560, H = 220, m = { t: 16, r: 16, b: 28, l: 60 };
+    const ys = rows.map(r => r.mrr_net_cents), slip = be.moorage_monthly_cents;
+    const yMax = niceMax(Math.max(...ys, slip && slip <= Math.max(...ys) * 1.5 ? slip : 0, 1));
+    const x = i => m.l + i / (rows.length - 1 || 1) * (W - m.l - m.r), y = v => m.t + (1 - v / yMax) * (H - m.t - m.b);
+    const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': 'Net revenue a month, over the horizon' });
+    for (let i = 0; i <= 4; i++) { const v = yMax * i / 4; svg.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), class: 'grid-line' })); svg.append(svgEl('text', { x: m.l - 8, y: y(v) + 4, class: 'axis-text', 'text-anchor': 'end' }, compact(v))); }
+    [1, 6, 12, 18, 24, 30, 36].filter(v => v <= rows.length).forEach(v => svg.append(svgEl('text', { x: x(v - 1), y: H - 8, class: 'axis-text', 'text-anchor': 'middle' }, 'm' + v)));
+    if (slip && slip <= yMax) { svg.append(svgEl('line', { x1: m.l, x2: W - m.r, y1: y(slip), y2: y(slip), class: 'ref-line' })); svg.append(svgEl('text', { x: W - m.r, y: y(slip) - 5, class: 'ref-text', 'text-anchor': 'end' }, 'slip fee ' + money(slip) + (be.slip_month ? ' · month ' + be.slip_month : ''))); }
+    const pts = rows.map((r, i) => [x(i), y(r.mrr_net_cents)]);
+    const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    svg.append(svgEl('path', { d: d + ' L' + pts[pts.length - 1][0].toFixed(1) + ',' + y(0) + ' L' + pts[0][0].toFixed(1) + ',' + y(0) + ' Z', fill: 'var(--s1)', class: 'series-area' }));
+    svg.append(svgEl('path', { d, stroke: 'var(--s1)', class: 'series-line' }));
+    const last = pts[pts.length - 1]; svg.append(svgEl('circle', { cx: last[0], cy: last[1], r: 5, fill: 'var(--s1)', stroke: 'var(--surface)', 'stroke-width': 2 }));
+    svg.append(svgEl('text', { x: last[0] - 8, y: last[1] - 10, class: 'end-label', 'text-anchor': 'end' }, compact(ys[ys.length - 1])));
+    host.append(svg);
+    // plan mix
+    const dh = $('#donut'); dh.innerHTML = '';
+    const plans = R.funnel.by_plan, total = plans.reduce((s, p) => s + p.new_subscribers, 0) || 1;
+    const dsvg = svgEl('svg', { viewBox: '0 0 140 140', role: 'img', 'aria-label': 'Share of new subscribers by plan' }); const C = 2 * Math.PI * 52; let off = 0;
+    plans.forEach((p, i) => { const frac = p.new_subscribers / total, len = Math.max(0, C * frac - 3); dsvg.append(svgEl('circle', { cx: 70, cy: 70, r: 52, fill: 'none', stroke: SLOT[p.key] || 'var(--s5)', 'stroke-width': 13, 'stroke-dasharray': len + ' ' + (C - len), 'stroke-dashoffset': -off, transform: 'rotate(-90 70 70)' })); off += C * frac; });
+    dsvg.append(svgEl('text', { x: 70, y: 67, class: 'ctr', 'text-anchor': 'middle' }, moneyExact(R.funnel.arpu_gross_cents))); dsvg.append(svgEl('text', { x: 70, y: 82, class: 'ctr2', 'text-anchor': 'middle' }, 'PER SUBSCRIBER'));
+    const dl = el('div', { class: 'dl' });
+    plans.forEach(p => dl.append(el('div', {}, el('i', { style: 'background:' + (SLOT[p.key] || 'var(--s5)') }), el('span', {}, p.name, el('br'), el('em', {}, moneyExact(p.price_cents) + ' / mo blended · ' + pct(p.share))), el('b', {}, p.new_subscribers.toFixed(1)))));
+    dh.append(dsvg, dl);
+    const kv = $('#earnKv'); kv.innerHTML = '';
+    [['travelers', num(ss.subscribers_travelers) + ' subscribers · ' + money(ss.mrr_net_travelers_cents) + '/mo'], ['performers', num(ss.subscribers_performers, 1) + ' · ' + money(ss.mrr_net_performers_cents) + '/mo'], ['by month 12', money(R.lenses.subscription.month_12 ? R.lenses.subscription.month_12.mrr_net_cents : 0) + '/mo · ' + money(R.lenses.subscription.month_12 ? R.lenses.subscription.month_12.cumulative_net_cents : 0) + ' earned so far']].forEach(([k, v]) => kv.append(el('dt', {}, k), el('dd', {}, v)));
+  }
+
+  // ---------- 5 · assumptions ----------
+  const GROWTH_KEYS = ['target_subscribers', 'target_month', 'viewers_per_show', 'shows_per_month', 'events_per_month', 'event_viewers_multiplier', 'dock_attendees_per_event', 'attendee_to_install', 'partner_church_live_viewers', 'partner_artist_subscribers', 'partner_live_share', 'partners_include_hypothetical', 'traveler_share', 'traveler_viewer_to_install', 'traveler_install_to_paid', 'traveler_annual_share', 'traveler_monthly_churn', 'viewer_to_install', 'install_to_paid', 'annual_share', 'monthly_churn', 'store_commission', 'baseline_subscribers', 'horizon_months'];
+  function renderAssumptions() {
+    const t = $('#assumptions'); t.innerHTML = '';
+    t.append(el('tr', {}, el('th', {}, 'what'), el('th', { class: 'num' }, 'value'), el('th', {}, 'source'), el('th', {}, 'basis')));
+    GROWTH_KEYS.forEach(k => { const a = R.assumptions[k]; if (!a) return; t.append(el('tr', {}, el('td', {}, el('code', {}, k)), el('td', { class: 'num' }, String(a.value)), el('td', {}, el('span', { class: 'src ' + a.source }, a.source)), el('td', { style: 'color:var(--ink-2)' }, a.note))); });
+  }
+  function renderChips() {
+    const b = R.baseline, chip = $('#baselineChip'); const n = b && b.subscribers ? b.subscribers : 0;
+    chip.lastChild.textContent = n > 0 ? 'baseline · ' + num(n) + ' subscribers' : 'baseline · not entered';
+    $('#modeChip').lastChild.textContent = R.recorded.shows ? 'recorded · ' + R.recorded.shows + ' show' + (R.recorded.shows === 1 ? '' : 's') : 'projection';
+  }
+  function render() { renderTrack(); renderReach(); renderFunnel(); renderEarn(); renderChips(); }
+  buildLevers(); render(); renderAssumptions();
+  const ex = $('#exportLink'); if (ex) ex.href = '/studio.html?' + queryFor();
+})();
+</script>
+{% endraw %}
+</body>
+</html>

@@ -272,3 +272,27 @@ CREATE TABLE IF NOT EXISTS usage_log (
     note       TEXT,
     logged_at  TEXT    NOT NULL
 );
+
+-- Shows performed aboard and streamed. The studio's return is modeled from
+-- declared conversion rates until this table has rows; once it does, observed
+-- viewers and installs replace the assumed inputs. A NULL count means nobody
+-- wrote the number down, which is not the same as zero.
+-- A competition night is a show of kind 'competition' with a crowd on the rear
+-- dock; `attendees` is that crowd. It is kept apart from unique_viewers because
+-- someone standing at the pier in front of the captions is not a stream viewer
+-- and converts on a different rate. NULL attendees means not counted.
+
+CREATE TABLE IF NOT EXISTS show_log (
+    id                  INTEGER PRIMARY KEY,
+    performed_at        TEXT,            -- YYYY-MM-DD
+    kind                TEXT    NOT NULL DEFAULT 'set',  -- set | competition
+    platform            TEXT,            -- youtube | twitch | kick | facebook | multi | ...
+    title               TEXT,
+    duration_minutes    INTEGER,
+    peak_viewers        INTEGER,
+    unique_viewers      INTEGER,
+    attendees           INTEGER,         -- on the rear dock and swim platform; NULL = not counted
+    installs_attributed INTEGER,         -- traced to this show: store analytics or promo code
+    note                TEXT,
+    logged_at           TEXT    NOT NULL
+);

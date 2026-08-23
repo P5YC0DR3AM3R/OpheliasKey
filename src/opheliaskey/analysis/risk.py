@@ -171,7 +171,12 @@ def line_item_coverage(db: Database, tolerance_cents: int = 100) -> list[dict]:
     Real order emails often carry a total with no itemization behind it, or
     itemization that omits tax and shipping. Wherever that happens, every
     per-system figure silently understates true spend — so it is surfaced as a
-    finding rather than absorbed quietly."""
+    finding rather than absorbed quietly.
+
+    Only a shortfall counts: an order whose line items add up to *more* than its
+    total (a discount or price adjustment the parser did not see) is not
+    under-itemized, and a net figure that mixed the two could come out negative
+    — a "gap" of −$11 is not a gap."""
     row = db.one(
         """SELECT COUNT(*) AS n, COALESCE(SUM(gap), 0) AS amt FROM (
              SELECT o.total_cents
@@ -181,7 +186,7 @@ def line_item_coverage(db: Database, tolerance_cents: int = 100) -> list[dict]:
                     - COALESCE(o.shipping_cents, 0)
                     + COALESCE(o.discount_cents, 0) AS gap
              FROM orders o WHERE o.status != 'cancelled'
-           ) WHERE ABS(gap) > ?""",
+           ) WHERE gap > ?""",
         (tolerance_cents,),
     )
     if not row or not row["n"]:
