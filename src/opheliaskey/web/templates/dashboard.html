@@ -78,27 +78,31 @@
 </head>
 <body>
 <div class="wrap">
+  {% include "_nav.html" %}
 
   <header>
     <h1>Ophelia's Key</h1>
     <span>{{ cost.totals.order_count }} orders · {{ cost.totals.item_count }} line items</span>
-    <span style="margin-left:auto"><a href="/review">Review queue →</a></span>
   </header>
 
   <div class="cards">
     <div class="card"><div class="label">Project spend</div>
       <div class="value">{{ cost.totals.net_cents | money }}</div></div>
+    {% if risk.budget_total_cents %}
     <div class="card"><div class="label">Budget</div>
       <div class="value">{{ risk.budget_total_cents | money }}</div></div>
-    {% if risk.remaining_cents is not none %}
+    {% endif %}
+    {% if risk.remaining_cents is not none and risk.budget_total_cents %}
     <div class="card"><div class="label">Remaining</div>
       <div class="value {{ 'over' if risk.remaining_cents < 0 else 'under' }}">
         {{ risk.remaining_cents | money }}</div></div>
     {% endif %}
     <div class="card"><div class="label">Burn / month</div>
       <div class="value">{{ cost.monthly_burn_cents | money }}</div></div>
+    {% if cost.totals.unreviewed_cents %}
     <div class="card"><div class="label">Unreviewed</div>
       <div class="value warnv">{{ cost.totals.unreviewed_cents | money }}</div></div>
+    {% endif %}
     <div class="card"><div class="label">Excluded as personal</div>
       <div class="value dimv">{{ cost.totals.personal_cents | money }}</div></div>
   </div>
@@ -186,7 +190,7 @@
   <h2>Reward</h2>
   <p class="detail" style="margin:-4px 0 12px">
     Four separate lenses, deliberately not summed. Refit spend does not return
-    dollar-for-dollar at resale — the sunk figure is not waste, it is what was
+    dollar-for-dollar at resale — the investment figure is what it took to start,
     exchanged for capability and use.
   </p>
   <div class="cards">
@@ -196,7 +200,7 @@
       <div class="value under">{{ reward.recovery.recoverable_cents | money }}
         <span class="detail" style="font-size:13px">({{ reward.recovery.recovery_pct }}%)</span>
       </div></div>
-    <div class="card"><div class="label">Permanently sunk</div>
+    <div class="card"><div class="label">Startup investment</div>
       <div class="value over">{{ reward.recovery.sunk_cents | money }}</div></div>
     {% if reward.labor.logged %}
     <div class="card"><div class="label">Labor avoided</div>
@@ -244,12 +248,12 @@
       </div>
       <p class="detail">
         {% if reward.use_value.nights_remaining %}
-          {{ reward.use_value.nights_remaining }} more nights until the sunk cost is
-          beaten by the alternative.
+          {{ reward.use_value.nights_remaining }} more nights until the startup investment is
+          covered by the alternative.
         {% else %}
-          The sunk cost is already beaten by the alternative.
+          The startup investment is already covered by the alternative.
         {% endif %}
-        Amortizes the sunk portion only — the recoverable portion is not consumed by use.
+        Amortizes the investment portion only — the recoverable portion is not consumed by use.
       </p>
       {% else %}
       <p class="detail">No nights logged. Break-even is
@@ -263,7 +267,7 @@
   <div class="panel scroll" style="margin-top:12px">
     <table>
       <thead><tr><th>System</th><th class="num">Spend</th><th class="num">Recovery</th>
-        <th class="num">Recoverable</th><th class="num">Sunk</th><th>Basis</th></tr></thead>
+        <th class="num">Recoverable</th><th class="num">Investment</th><th>Basis</th></tr></thead>
       <tbody>
       {% for l in reward.recovery.lines %}
         <tr><td>{{ l.name }}</td><td class="num">{{ l.spend_cents | money }}</td>
@@ -329,7 +333,7 @@
     </table>
   </div>
   <p class="detail" style="margin-top:10px">
-    <a href="/review">Clear the queue →</a> &nbsp;·&nbsp; or from the CLI:
+    Clear it from the CLI: <code>okey review</code> to see the queue, then
     <code>okey review --item &lt;id&gt; --mark boat --system electronics_nav</code>
   </p>
   {% endif %}

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -14,6 +15,7 @@ from .analysis.demo import clear_demo, seed_demo
 from .analysis.reconcile import reconcile as run_reconcile
 from .analysis.risk import risk_report
 from .analysis.spec import spec_report
+from .analysis.studio import OBSERVABLE, PARTNERS, STUDIO_CAPITAL_SYSTEMS, studio_report
 from .analysis.reward import reward_report
 from .classify.rules import apply_rules
 from .classify.taxonomy import seed_systems, seed_vessel_meta
@@ -51,7 +53,11 @@ def _db():
     return db
 
 
-log_app = typer.Typer(help="Record labor and usage for reward analysis.", no_args_is_help=True)
+log_app = typer.Typer(
+    help="Record labor, nights aboard and shows — the inputs the reward and studio reports "
+         "cannot read from receipts.",
+    no_args_is_help=True,
+)
 app.add_typer(log_app, name="log")
 
 
@@ -102,6 +108,269 @@ def log_nights(
     )
     total = db.one("SELECT COALESCE(SUM(nights),0) n FROM usage_log")
     console.print(f"[green]logged {nights} nights[/] — {total['n']} total aboard")
+
+
+SHOW_KINDS: tuple[str, ...] = ("set", "competition")
+
+
+@log_app.command("show")
+def log_show(
+    date: str = typer.Option("", "--date", help="YYYY-MM-DD; defaults to today."),
+    kind: str = typer.Option(
+        "set", "--kind", help="set | competition — a solo set or a Paradise Busker night."),
+    platform: str = typer.Option("", "--platform",
+                                 help="youtube | twitch | kick | facebook | multi."),
+    title: str = typer.Option("", "--title", help="Set or episode title."),
+    minutes: int | None = typer.Option(
+        None, "--minutes", help="Stream length in minutes, 0 or more."),
+    peak: int | None = typer.Option(None, "--peak", help="Peak concurrent viewers, 0 or more."),
+    unique: int | None = typer.Option(None, "--unique", help="Unique viewers, 0 or more."),
+    attendees: int | None = typer.Option(
+        None, "--attendees",
+        help="People on the rear dock and swim platform, if counted; 0 or more."),
+    installs: int | None = typer.Option(
+        None, "--installs",
+        help="Installs traced to this show: store analytics or promo code; 0 or more."),
+    note: str = typer.Option("", "--note"),
+):
+    """Record a livestream set or a competition night performed aboard.
+
+    The studio report models viewers, install rate and the dock crowd until a
+    show exists; from the first logged show, the observed figures replace the
+    assumed ones. Leave a count out when nobody wrote it down — a missing
+    number is not a zero, and the report keeps the difference.
+    """
+    if kind not in SHOW_KINDS:
+        console.print(
+            f"[red]--kind must be one of {', '.join(SHOW_KINDS)}; got '{escape(kind)}'[/]")
+        raise typer.Exit(1)
+    # A count is 0 or more. A negative one is refused before anything is
+    # written, the way a negative override is: the model would otherwise
+    # carry it into a negative install rate and a negative return.
+    counts = {"--minutes": minutes, "--peak": peak, "--unique": unique,
+              "--attendees": attendees, "--installs": installs}
+    for flag, value in counts.items():
+        if value is not None and value < 0:
+            console.print(
+                f"[red]{flag} must be 0 or greater, got {value} — leave a count out when nobody "
+                f"wrote it down; it is never negative[/]")
+            raise typer.Exit(1)
+    db = _db()
+    performed = date or utcnow()[:10]
+    db.execute(
+        """INSERT INTO show_log (performed_at, kind, platform, title, duration_minutes,
+             peak_viewers, unique_viewers, attendees, installs_attributed, note, logged_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+        (performed, kind, platform or None, title or None, minutes, peak, unique, attendees,
+         installs, note or None, utcnow()),
+    )
+    total = db.one("SELECT COUNT(*) n FROM show_log")
+    # User strings are escaped: a title like "[live] Set one" is a title, not
+    # markup, and must never break this line or the report's table.
+    console.print(
+        f"[green]logged {'competition night' if kind == 'competition' else 'show'}[/] "
+        f"{escape(performed)}"
+        + (f" on {escape(platform)}" if platform else "")
+        + (f" — {escape(title)}" if title else "")
+        + (f"  ·  {attendees} on the dock" if attendees is not None else "")
+        + f"  ·  {total['n']} recorded"
+    )
+
+
+# --- studio inputs ----------------------------------------------------------
+# What the studio report cannot read from the ledger or the show log: today's
+# paying subscribers live in App Store Connect, Google Play and Firestore, and
+# a partner channel's audience lives in that channel's analytics, so they are
+# declared here and the report says where they came from.
+
+studio_app = typer.Typer(
+    help="Floating studio inputs the report cannot read from the ledger.", no_args_is_help=True)
+app.add_typer(studio_app, name="studio")
+
+BASELINE_KEY = "studio.baseline_subscribers"
+
+# Each partner row names the one assumption that holds its audience figure —
+# a church's live viewers per stream, an artist's subscriber count — and
+# `okey studio partner` writes that assumption to project_meta, so the report
+# reads it as `meta` and the PLACEHOLDER flag on the row clears.
+PARTNER_BY_KEY: dict[str, dict] = {partner["key"]: partner for partner in PARTNERS}
+
+
+def _partner_audience_key(partner: dict) -> str:
+    return partner["live_viewers_per_stream_key"] or partner["subscribers_key"]
+
+
+def _partner_meta_key(partner: dict) -> str:
+    return f"studio.{_partner_audience_key(partner)}"
+
+
+def _print_baseline_effect(report: dict) -> None:
+    """The baseline as the report reads it, and what it does and does not move."""
+    baseline, breakeven = report["baseline"], report["breakeven"]
+    horizon = breakeven["horizon_months"]
+    if baseline["subscribers"] > 0:
+        console.print(
+            f"[bold]baseline[/]   {baseline['subscribers']:g} subscribers "
+            f"({_sources(baseline['source'])}) — the trajectory starts here")
+    else:
+        console.print("[bold]baseline[/]   not entered — okey studio baseline --subscribers N")
+    m12 = report["lenses"]["subscription"]["month_12"]
+    if m12:
+        console.print(
+            f"month 12   {m12['subscribers']:g} subscribers, "
+            f"{fmt_money(m12['mrr_net_cents'])}/mo net — "
+            f"{m12['show_driven_subscribers']:g} show-driven, "
+            f"{fmt_money(m12['show_driven_mrr_net_cents'])}/mo of it from the shows")
+    console.print(
+        f"payback    kit {_month(breakeven['kit_month'], horizon)} — counts show-driven revenue "
+        f"only, so the baseline does not move it")
+    console.print(f"[dim]{baseline['note']}[/]")
+
+
+@studio_app.command("baseline")
+def studio_baseline(
+    subscribers: int | None = typer.Option(
+        None, "--subscribers",
+        help="Paying subscribers today, from App Store Connect / Google Play / Firestore."),
+    clear: bool = typer.Option(False, "--clear", help="Forget the entered figure."),
+):
+    """Declare today's paying subscribers — where the trajectory starts.
+
+    The real figure is not on this machine, so it is entered rather than read,
+    and 0 reads as "not entered", not zero. The studio report starts its
+    trajectory at the baseline and keeps the show-driven figures apart from it:
+    payback and ROI count only the subscribers the shows bring, so the baseline
+    moves the book, never the kit's return. With no flag, prints the figure as
+    the report currently reads it.
+    """
+    if subscribers is not None and clear:
+        console.print("[red]--subscribers and --clear are two different instructions; give one[/]")
+        raise typer.Exit(1)
+    if subscribers is not None and subscribers < 0:
+        console.print(f"[red]--subscribers must be 0 or greater, got {subscribers}[/]")
+        raise typer.Exit(1)
+    db = _db()
+    if clear:
+        db.execute("DELETE FROM project_meta WHERE key = ?", (BASELINE_KEY,))
+        console.print("[green]baseline cleared[/] — not entered")
+    elif subscribers is not None:
+        db.execute(
+            """INSERT INTO project_meta (key, value, updated_at) VALUES (?,?,?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value,
+                 updated_at=excluded.updated_at""",
+            (BASELINE_KEY, str(subscribers), utcnow()),
+        )
+        console.print(f"[green]baseline set[/] {subscribers} paying subscribers" + (
+            " — 0 reads as not entered" if subscribers == 0 else ""))
+    try:
+        report = studio_report(db)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
+    _print_baseline_effect(report)
+
+
+def _print_partner_effect(report: dict, key: str) -> None:
+    """The partner as the report reads it — its audience and where the figure
+    came from, what it adds to the month, whether it is counted — and what
+    that does to the steady state and the target. A figure still at the
+    declared stand-in is called PLACEHOLDER here as loudly as in the report."""
+    partner = PARTNER_BY_KEY[key]
+    row = next(r for r in report["reach"]["partners"] if r["key"] == key)
+    inputs = report["funnel"]["inputs"]
+    source = _sources(inputs[_partner_audience_key(partner)]["source"])
+    steady = report["funnel"]["steady_state"]
+    console.print(f"[bold]partner[/]    {row['name']} ({key}) — {_partner_status(row)}")
+    console.print(
+        f"audience   {_audience(row, inputs['partner_live_share']['value'])} ({source}) × "
+        f"{row['streams_per_month']} stream(s)/mo = {_count(row['viewers_per_month'])} viewers/mo, "
+        f"{_count(row['viewers_abroad'])} abroad"
+        + (f", {_count(row['new_paid_per_month'])} new paid/mo at the current rates"
+           if row["active"] else " — not counted while off; okey report studio "
+                                 "--with-hypothetical counts it"))
+    if row["placeholder"]:
+        console.print(f"           {_placeholder_line(row, key)}")
+    console.print(
+        f"steady     {steady['subscribers']:g} subscribers · "
+        f"{fmt_money(steady['mrr_net_cents'])}/mo net, with every counted partner")
+    console.print(
+        f"target     {_target_phrase(report['target'], report['breakeven']['horizon_months'])}")
+
+
+@studio_app.command("partner")
+def studio_partner(
+    key: str = typer.Argument(
+        ..., help=f"Partner key: {' | '.join(PARTNER_BY_KEY)} — the Reach panel lists them."),
+    live_viewers: int | None = typer.Option(
+        None, "--live-viewers",
+        help="Live viewers per stream, from the channel's analytics — for a church; 0 or more."),
+    subscribers: int | None = typer.Option(
+        None, "--subscribers",
+        help="Channel subscribers — for an artist; the live share is the partner_live_share "
+             "assumption; 0 or more."),
+    clear: bool = typer.Option(
+        False, "--clear", help="Forget the entered figure; the declared value stands again."),
+):
+    """Enter a partner channel's audience — the figure the Reach panel runs on.
+
+    A partner's audience lives in its channel analytics, not on this machine,
+    so it is entered rather than read: a church's live viewers per Sunday
+    stream, an artist's subscriber count. the partner church's figure is a labelled
+    PLACEHOLDER until it is entered here, and the report says so on the row
+    and in the headline for as long as that lasts. With no flag, prints the
+    figure as the report currently reads it.
+    """
+    partner = PARTNER_BY_KEY.get(key)
+    if partner is None:
+        console.print(f"[red]unknown partner '{escape(key)}' — one of: "
+                      f"{', '.join(PARTNER_BY_KEY)}[/]")
+        raise typer.Exit(1)
+    given = {flag: value for flag, value in (("--live-viewers", live_viewers),
+                                              ("--subscribers", subscribers))
+             if value is not None}
+    if len(given) > 1:
+        console.print("[red]a partner has one audience figure; give --live-viewers or "
+                      "--subscribers, not both[/]")
+        raise typer.Exit(1)
+    if given and clear:
+        console.print(f"[red]{next(iter(given))} and --clear are two different instructions; "
+                      f"give one[/]")
+        raise typer.Exit(1)
+    # The figure must be in the partner's own unit: a church counts live
+    # viewers a stream, an artist's viewers are derived from its subscribers.
+    wanted = "--live-viewers" if partner["kind"] == "church" else "--subscribers"
+    if given and wanted not in given:
+        unit = ("live viewers per stream" if partner["kind"] == "church"
+                else "its subscriber count, with the live share as the partner_live_share "
+                     "assumption")
+        article = "an" if partner["kind"][0] in "aeiou" else "a"
+        console.print(f"[red]{partner['name']} is {article} {partner['kind']}: its audience is "
+                      f"{unit} — okey studio partner {key} {wanted} N[/]")
+        raise typer.Exit(1)
+    value = given.get(wanted)
+    if value is not None and value < 0:
+        console.print(f"[red]{wanted} must be 0 or greater, got {value}[/]")
+        raise typer.Exit(1)
+    db = _db()
+    meta_key = _partner_meta_key(partner)
+    if clear:
+        db.execute("DELETE FROM project_meta WHERE key = ?", (meta_key,))
+        console.print(f"[green]{key} cleared[/] — the declared figure stands")
+    elif value is not None:
+        db.execute(
+            """INSERT INTO project_meta (key, value, updated_at) VALUES (?,?,?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value,
+                 updated_at=excluded.updated_at""",
+            (meta_key, str(value), utcnow()),
+        )
+        console.print(f"[green]{key} set[/] {wanted.lstrip('-').replace('-', ' ')} {value:,} "
+                      f"→ project_meta {meta_key}")
+    try:
+        report = studio_report(db)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
+    _print_partner_effect(report, key)
 
 
 gmail_app = typer.Typer(help="Gmail connection setup.", no_args_is_help=True)
@@ -696,7 +965,7 @@ def report_commitments():
         )
     if summary["unpriced_count"] == summary["count"]:
         header += (
-            f"\n[yellow]Estimated            unknown — none of these are quoted yet[/]"
+            "\n[yellow]Estimated            unknown — none of these are quoted yet[/]"
         )
     elif summary["unpriced_count"]:
         header += (
@@ -879,19 +1148,19 @@ def report_reward(
             f"Spent on the vessel   [bold]{fmt_money(rec['vessel_spend_cents'])}[/]\n"
             f"Plausibly recoverable [green]{fmt_money(rec['recoverable_cents'])}[/] "
             f"({rec['recovery_pct']}%)\n"
-            f"Permanently sunk      [red]{fmt_money(rec['sunk_cents'])}[/]\n"
+            f"Startup investment    {fmt_money(rec['sunk_cents'])}\n"
             + (f"Not yet attributed    [yellow]{fmt_money(rec['unattributed_cents'])}[/] "
                f"across {rec['unattributed_count']} items — no recovery rate applies\n"
                if rec["unattributed_cents"] else "")
             + (f"Retained as tools     {fmt_money(rec['tool_residual_cents'])} "
                f"(does not convey with the boat)\n" if rec["tool_spend_cents"] else "")
-            + "\n[dim]Refit spend does not return dollar-for-dollar at resale. The sunk\n"
-              "figure is not waste — it is what you exchanged for capability and use.[/]",
+            + "\n[dim]Refit spend does not return dollar-for-dollar at resale. The investment\n"
+              "figure is what it took to start — exchanged for capability and use.[/]",
             title="Ophelia's Key — reward", border_style="green",
         )
     )
 
-    table = Table("system", "spend", "rate", "recoverable", "sunk")
+    table = Table("system", "spend", "rate", "recoverable", "investment")
     for line in rec["lines"]:
         table.add_row(
             line["name"], fmt_money(line["spend_cents"]), f"{line['rate']*100:.0f}%",
@@ -955,7 +1224,7 @@ def report_reward(
         console.print(
             f"  {use['nights']} nights aboard at "
             f"[green]{fmt_money(use['cost_per_night_cents'])}/night[/] "
-            f"against the sunk cost"
+            f"against the startup investment"
         )
         console.print(
             f"  Alternative would have cost {fmt_money(use['value_realized_cents'])} "
@@ -963,11 +1232,11 @@ def report_reward(
         )
         if use["nights_remaining"]:
             console.print(
-                f"  [yellow]{use['nights_remaining']} more nights[/] until the sunk cost "
+                f"  [yellow]{use['nights_remaining']} more nights[/] until the startup investment "
                 f"is beaten by the alternative"
             )
         else:
-            console.print("  [green]The sunk cost is already beaten by the alternative.[/]")
+            console.print("  [green]The startup investment is already covered by the alternative.[/]")
     else:
         console.print(
             f"  [dim]No nights logged. Break-even is {use['breakeven_nights']} nights at "
@@ -987,6 +1256,834 @@ def report_reward(
         console.print(rates)
     else:
         console.print("\n[dim]Run with --assumptions to see the rates behind these.[/]")
+
+
+def _num(value) -> str:
+    """A count or rate for display. None stays a dash — it was never a zero."""
+    if value is None:
+        return "—"
+    return str(value) if isinstance(value, int) else f"{value:g}"
+
+
+def _pct(value) -> str:
+    return "—" if value is None else f"{value * 100:.0f}%"
+
+
+def _month(value, horizon: int) -> str:
+    return f"month {value} of {horizon}" if value is not None else f"not within {horizon} months"
+
+
+def _sources(*sources: str) -> str:
+    """Tag a figure with where its inputs came from; name each when they differ."""
+    palette = {"assumed": "dim", "meta": "cyan", "override": "yellow", "observed": "green"}
+    distinct = list(dict.fromkeys(sources))
+    return " · ".join(f"[{palette.get(s, 'dim')}]{s}[/]" for s in distinct)
+
+
+# The funnel inputs a logged show can measure, in the words the headline uses.
+OBSERVABLE_LABELS: dict[str, str] = {
+    "viewers_per_show": "viewers per set",
+    "viewer_to_install": "stream install rate",
+    "event_viewers_multiplier": "competition multiple",
+    "dock_attendees_per_event": "dock crowd",
+}
+
+
+def _basis(recorded: dict, inputs: dict[str, dict]) -> str:
+    """What the return rests on, read from the same sources the funnel table prints.
+
+    Driven by the recorded show count and the source of each observable input,
+    so the sentence can never disagree with the source column below it: shows
+    logged without counts are still modeled, and one observed input does not
+    make the whole return observed.
+    """
+    if recorded["shows"] == 0:
+        return "No shows recorded yet — return is modeled from declared rates"
+    groups: dict[str, list[str]] = {"observed": [], "modeled": [], "overridden": []}
+    for key in OBSERVABLE:
+        source = inputs[key]["source"]
+        group = ("observed" if source == "observed"
+                 else "overridden" if source == "override" else "modeled")
+        groups[group].append(OBSERVABLE_LABELS.get(key, key))
+    parts = [f"{name}: {', '.join(labels)}" for name, labels in groups.items() if labels]
+    return f"{recorded['shows']} show(s) recorded — {'; '.join(parts)}"
+
+
+def _ratio(value, why: str) -> str:
+    """An ROI multiple, or the reason there is none."""
+    return f"— ({why})" if value is None else f"×{value:g}"
+
+
+def _money_or(cents, why: str) -> str:
+    return f"— ({why})" if cents is None else fmt_money(cents)
+
+
+def _count(value) -> str:
+    """A count with thousands separators and no trailing zeros — 20,000 ·
+    9,548.8 · 0.45 — for figures big enough that `:g` would lose digits
+    (6,190,000 subscribers is not 6.19e+06). None stays a dash."""
+    if value is None:
+        return "—"
+    if float(value).is_integer():
+        return f"{int(value):,}"
+    return f"{value:,.2f}".rstrip("0").rstrip(".")
+
+
+# --- reach and the target ---------------------------------------------------
+# Partner streams are data: each row says whether it has committed (counted)
+# or is hypothetical (counted only with --with-hypothetical), where its
+# audience figure came from, and how much of its audience is abroad — a
+# declared share, not a measurement. A figure still at the declared stand-in
+# is called PLACEHOLDER wherever it prints, with the command that replaces it.
+
+
+def _partner_status(row: dict) -> str:
+    if row["status"] == "committed":
+        return "[green]committed[/] · counted"
+    if row["active"]:
+        return "[yellow]prospective[/] · counted"
+    return "[dim]prospective · off[/]"
+
+
+def _audience(row: dict, live_share: float) -> str:
+    """A partner's audience in its own unit: live viewers a stream for a
+    church, subscribers at the declared live share for an artist."""
+    if row["kind"] == "artist":
+        return f"{_count(row['subscribers'])} subscribers × {live_share * 100:g}% live share"
+    return f"{_count(row['live_viewers_per_stream'])} live viewers per stream"
+
+
+def _placeholder_line(row: dict, key: str) -> str:
+    """The loud one: this partner's audience is a stand-in, not a figure."""
+    return (f"[bold]ESTIMATE[/]  {row['name']}'s "
+            f"{_count(row['live_viewers_per_stream'])} live viewers per stream is an estimate; "
+            f"set the channel's figure: okey studio partner {key} "
+            f"--live-viewers N")
+
+
+def _target_phrase(target: dict, horizon: int) -> str:
+    """The target in one phrase: on track, or how far short and when (if ever)
+    the trajectory gets there; none set reads as none set."""
+    if not target["subscribers"]:
+        return ("none set — okey report studio --target N reads one for the run; "
+                "studio.target_subscribers in project_meta keeps it")
+    goal = f"{target['subscribers']:,} by month {target['month']}"
+    reached = target["reached_month"]
+    when = (f"reached in month {reached}" if reached is not None
+            else f"not within {horizon} months")
+    if target["on_track"]:
+        return f"{goal}: [green]on track[/] — {when}"
+    at_month = target["subscribers_at_target_month"]
+    if at_month is None:
+        return f"{goal}: month {target['month']} is past the {horizon}-month horizon — {when}"
+    return (f"{goal}: [yellow]{_count(target['shortfall'])} short[/] — "
+            f"{_count(at_month)} at month {target['month']}, {when}")
+
+
+def _print_reach(report: dict) -> None:
+    """Who the overlay is in front of each month, partner by partner.
+
+    Every row carries its full audience — what the partner adds, or would add
+    — whether it is counted, and its source; the totals sum only the counted
+    rows, so this table and the funnel's Viewers row can never disagree. A
+    partner still at its declared stand-in is marked PLACEHOLDER on the row
+    and again below it, with the command that replaces the figure.
+    """
+    reach, monthly = report["reach"], report["funnel"]["monthly"]
+    inputs = report["funnel"]["inputs"]
+    live_share = inputs["partner_live_share"]["value"]
+    table = Table(
+        "partner", "status", "streams/mo", "audience", "viewers/mo", "abroad", "new paid/mo",
+        "source",
+        title=f"\nReach — {_count(reach['viewers_total_per_month'])} viewers a month on every "
+              f"screen the overlay is on",
+    )
+    new_paid = 0.0
+    for row in reach["partners"]:
+        partner = PARTNER_BY_KEY[row["key"]]
+        sources = [inputs[_partner_audience_key(partner)]["source"]]
+        if row["kind"] == "artist":
+            sources.append(inputs["partner_live_share"]["source"])
+        source = _sources(*sources)
+        if row["placeholder"]:
+            source = f"[bold]ESTIMATE[/] · {source}"
+        style = "" if row["active"] else "dim"
+        new_paid += row["new_paid_per_month"]
+        table.add_row(
+            f"[bold]{row['name']}[/]", _partner_status(row), str(row["streams_per_month"]),
+            _audience(row, live_share),
+            _count(row["viewers_per_month"]) + ("" if row["active"] else " · off"),
+            f"{_count(row['viewers_abroad'])} ({row['international_share'] * 100:.0f}%)",
+            _count(row["new_paid_per_month"]), source, style=style,
+        )
+    table.add_row(
+        "[bold]Partners counted[/]", "", "", "",
+        f"[bold]{_count(reach['viewers_partner_per_month'])}[/]",
+        f"[bold]{_count(reach['viewers_abroad_per_month'])}[/]",
+        f"[bold]{_count(round(new_paid, 2))}[/]", "",
+    )
+    console.print(table)
+    console.print(
+        f"  All screens  {_count(reach['viewers_total_per_month'])} viewers a month = "
+        f"{_count(monthly['viewers_stream'] + monthly['viewers_event'])} the boat's own "
+        f"({_count(monthly['viewers_stream'])} stream + {_count(monthly['viewers_event'])} event) "
+        f"+ {_count(reach['viewers_partner_per_month'])} from partner streams; "
+        f"{_count(reach['viewers_abroad_per_month'])} of them abroad"
+    )
+    languages = reach["languages"]
+    console.print(f"  Languages    {languages['base']} base · {languages['total']} in all — "
+                  f"{reach['note']}")
+    for row in reach["partners"]:
+        if not row["active"]:
+            console.print(
+                f"  [dim]Off          {row['name']} ({row['status']}) would add "
+                f"{_count(row['viewers_per_month'])} viewers a month, "
+                f"{_count(row['viewers_abroad'])} abroad — okey report studio "
+                f"--with-hypothetical counts it[/]")
+    for row in reach["partners"]:
+        if row["placeholder"]:
+            console.print(f"  {_placeholder_line(row, row['key'])}")
+
+
+def _print_target(report: dict) -> None:
+    """The owner's target, read against the trajectory and answered in its
+    own terms: where the book stands in the target month, when (if ever) the
+    target is reached, and what it takes at the current rates and cadence."""
+    target, horizon = report["target"], report["breakeven"]["horizon_months"]
+    v = {key: entry["value"] for key, entry in report["funnel"]["inputs"].items()}
+    reach = report["reach"]
+    if not target["subscribers"]:
+        console.print(Panel(
+            f"Target            {_target_phrase(target, horizon)}\n"
+            f"At current rates  {_count(target['subscribers_at_target_month'])} subscribers at "
+            f"month {target['month']}\n\n[dim]{target['note']}[/]",
+            title="Target — none set", border_style="magenta"))
+        return
+    reached = target["reached_month"]
+    when = (f"reached in month {reached}" if reached is not None
+            else f"not within {horizon} months")
+    at_month = target["subscribers_at_target_month"]
+    if at_month is None:
+        standing = (f"month {target['month']} is past the {horizon}-month horizon "
+                    f"(horizon_months) — {when}")
+    elif target["on_track"]:
+        standing = (f"{_count(at_month)} subscribers at month {target['month']} — "
+                    f"[green]on track[/], {when}")
+    else:
+        standing = (f"{_count(at_month)} subscribers at month {target['month']} — "
+                    f"[yellow]{_count(target['shortfall'])} short[/]; {when}")
+    shows = v["shows_per_month"] + v["events_per_month"]
+    required_viewers = target["required_viewers_per_month"]
+    now = f"against {_count(reach['viewers_total_per_month'])} a month on every screen now"
+    if required_viewers is None:
+        viewers = "no number of viewers — the current rates convert nobody"
+        per_show = "—"
+    else:
+        viewers = f"{_count(required_viewers)} viewers a month at the current rates, {now}"
+        per_show = (f"{_count(round(required_viewers / shows, 2))} viewers at {shows:g} shows a "
+                    f"month ({v['shows_per_month']:g} sets + {v['events_per_month']:g} nights)"
+                    if shows > 0 else "no shows in the month to spread them over")
+    console.print(Panel(
+        f"Target            {target['subscribers']:,} paying subscribers by month "
+        f"{target['month']}\n"
+        f"At current rates  {standing}\n"
+        f"What it takes     {_count(target['required_new_paid_per_month'])} new paid a month from "
+        f"a standing start ({v['traveler_monthly_churn'] * 100:g}% traveler churn) = {viewers}\n"
+        f"Per show          {per_show}\n"
+        f"\n[dim]{target['note']}[/]",
+        title="Target — read against the trajectory", border_style="magenta"))
+
+
+@report_app.command("studio")
+def report_studio(
+    viewers: float | None = typer.Option(None, "--viewers", help="Unique viewers per show."),
+    shows: float | None = typer.Option(None, "--shows", help="Shows per month."),
+    install_rate: float | None = typer.Option(
+        None, "--install-rate", help="Share of viewers who install, 0–1."),
+    paid_rate: float | None = typer.Option(
+        None, "--paid-rate", help="Share of installs that start a paid plan, 0–1."),
+    churn: float | None = typer.Option(None, "--churn", help="Monthly subscriber churn, 0–1."),
+    events: float | None = typer.Option(
+        None, "--events", help="Competition nights per month; 0 is a valid month."),
+    attendees: float | None = typer.Option(
+        None, "--attendees", help="People on the rear dock and swim platform per night."),
+    traveler_share: float | None = typer.Option(
+        None, "--traveler-share",
+        help="Share of the audience whose need is Conversation Mode — travelers — 0–1; "
+             "the rest are performers."),
+    traveler_paid: float | None = typer.Option(
+        None, "--traveler-paid",
+        help="Share of traveler installs that start Base + Conversation Mode, 0–1."),
+    with_hypothetical: bool = typer.Option(
+        False, "--with-hypothetical",
+        help="Count the partners that have not committed yet (Partner artist); off by default."),
+    partner_live_share: float | None = typer.Option(
+        None, "--partner-live-share",
+        help="Share of an artist partner's subscribers who watch a given live stream, 0–1."),
+    target: int | None = typer.Option(
+        None, "--target", help="Paying subscribers to reach; 0 is no target."),
+    target_month: int | None = typer.Option(
+        None, "--target-month", help="Month by which to reach it, 1–120."),
+    assumptions: bool = typer.Option(False, "--assumptions", help="Show the assumption table."),
+    html: str = typer.Option("", "--html", help="Write the page as standalone HTML to this path."),
+):
+    """The boat as a floating production studio.
+
+    Four questions, answered separately: can the bank power a show, can
+    Starlink carry it, what does the kit cost beyond what is aboard, and what
+    does the show plausibly return in Lyric Show subscriptions. The return is
+    modeled from declared assumptions until shows are logged, and it comes in
+    three lenses that are never summed. The audience is two segments by need
+    — travelers, who subscribe for Conversation Mode, and performers, the
+    original funnel — each with its own rates, plan and churn, kept apart to
+    the steady state and summed only there. Competition nights add a second
+    audience — the crowd on the rear dock, travelers who had the demo in
+    person — with its own install rate, and a block on where Lyric Show is on
+    screen during one. Partner streams — other stages the overlay is on — add
+    their viewers to the month; the Reach panel lists them as data, committed
+    partners counted and hypothetical ones only with --with-hypothetical, and
+    marks an audience figure still at its placeholder. The Target panel reads
+    the owner's target against the trajectory. The ROI panel reads the kit's
+    return off the show-driven trajectory alone: a declared baseline of
+    today's subscribers (okey studio baseline) starts the book, never the kit.
+    """
+    db = _db()
+    flags = {
+        "viewers_per_show": viewers, "shows_per_month": shows,
+        "viewer_to_install": install_rate, "install_to_paid": paid_rate,
+        "monthly_churn": churn,
+        "events_per_month": events, "dock_attendees_per_event": attendees,
+        "traveler_share": traveler_share, "traveler_install_to_paid": traveler_paid,
+        # The switch is an override only when thrown: the default stays the
+        # declared 0 and reads as assumed, like every other untouched input.
+        "partners_include_hypothetical": 1 if with_hypothetical else None,
+        "partner_live_share": partner_live_share,
+        "target_subscribers": target, "target_month": target_month,
+    }
+    overrides = {key: value for key, value in flags.items() if value is not None}
+    try:
+        report = studio_report(db, overrides or None)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1)
+
+    # A page that cannot be written is refused before the report is printed:
+    # one red line up front, not the whole report and then a traceback.
+    if html:
+        from .web.app import render_studio_standalone
+
+        try:
+            Path(html).write_text(render_studio_standalone(db, overrides), encoding="utf-8")
+        except OSError as exc:
+            console.print(f"[red]could not write {escape(html)}: {escape(str(exc))}[/]")
+            raise typer.Exit(1)
+
+    funnel, steady = report["funnel"], report["funnel"]["steady_state"]
+    breakeven, recorded, kit = report["breakeven"], report["recorded"], report["kit"]
+    horizon = breakeven["horizon_months"]
+
+    # --- headline ---
+    basis = _basis(recorded, funnel["inputs"])
+    if breakeven["moorage_monthly_cents"] is None:
+        slip = "no moorage spend recorded, so nothing to cover"
+    else:
+        slip = (f"{_month(breakeven['slip_month'], horizon)}  —  "
+                f"{fmt_money(breakeven['moorage_monthly_cents'])}/mo slip")
+    # Two segments by need, named on the headline: the book is their sum and
+    # nothing else, so the reader sees which need carries it. The target is
+    # one phrase; a counted partner still at its placeholder audience is named
+    # here, loudly, because the headline rests on it.
+    reach = report["reach"]
+    placeholders = [row for row in reach["partners"] if row["active"] and row["placeholder"]]
+    placeholder_lines = "".join(
+        f"\n[bold]ESTIMATE[/]          {row['name']}'s "
+        f"{_count(row['live_viewers_per_stream'])} live viewers a stream is an estimate: "
+        f"{_count(row['viewers_per_month'])} of {_count(reach['viewers_total_per_month'])} "
+        f"viewers depend on it — okey studio partner {row['key']} --live-viewers N"
+        for row in placeholders)
+    console.print(
+        Panel(
+            f"Steady state      [bold]{steady['subscribers']:g} subscribers[/] "
+            f"({steady['subscribers_travelers']:g} travelers · "
+            f"{steady['subscribers_performers']:g} performers)  ·  "
+            f"[green]{fmt_money(steady['mrr_net_cents'])}[/]/mo net  ·  "
+            f"[green]{fmt_money(steady['arr_net_cents'])}[/]/yr net\n"
+            f"Target            {_target_phrase(report['target'], horizon)}\n"
+            f"Kit payback       {_month(breakeven['kit_month'], horizon)}  —  "
+            f"{fmt_money(kit['planned_cents'])} planned, "
+            f"{fmt_money(kit['recorded_cents'])} bought\n"
+            f"Slip covered      {slip}\n"
+            f"Project payback   {_month(breakeven['project_month'], horizon)}  —  "
+            f"{fmt_money(breakeven['project_spend_cents'])} project spend"
+            f"{placeholder_lines}\n"
+            f"\n[dim]{basis}. Three return figures below, reported separately.[/]",
+            title="Ophelia's Key — floating studio", border_style="cyan",
+        )
+    )
+
+    # --- roi ---
+    # Derived from the subscription lens, not a fourth one, and read off the
+    # show-driven columns: the baseline's own revenue never flatters the kit.
+    roi, baseline = report["roi"], report["baseline"]
+    m12, hz = roi["month_12"], roi["horizon"]
+    cpi_cents = report["lenses"]["acquisition_displaced"]["cpi_cents"]
+    if m12 is None:
+        at_12 = "— (horizon shorter than 12 months)"
+    else:
+        at_12 = (f"{_ratio(m12['roi_multiple_on_kit'], 'no kit priced')} at month 12 "
+                 f"({fmt_money(m12['show_driven_cumulative_net_cents'])} show-driven net)")
+    at_horizon = (f"{_ratio(hz['roi_multiple_on_kit'], 'no kit priced')} at month {horizon} "
+                  f"({fmt_money(hz['show_driven_cumulative_net_cents'])})")
+    share = hz["share_of_project_spend"]
+    of_project = ("— of project spend (nothing spent yet)" if share is None
+                  else f"{share * 100:.0f}% of project spend")
+    # No moorage recorded is nothing to cover, not a slip uncovered for 36 months.
+    slip_payback = ("— (no moorage recorded)" if breakeven["moorage_monthly_cents"] is None
+                    else _month(roi["payback"]["slip_month"], horizon))
+    if baseline["subscribers"] > 0:
+        baseline_line = (f"{baseline['subscribers']:g} subscribers ({baseline['source']}) — the "
+                         f"trajectory starts here; payback and ROI count show-driven revenue only")
+    else:
+        baseline_line = "not entered — okey studio baseline --subscribers N"
+    console.print(
+        Panel(
+            f"Kit ROI           {at_12}  ·  {at_horizon}  ·  {of_project}\n"
+            f"Per show          {_money_or(roi['per_show_net_cents'], 'no shows in the month')}"
+            f"/mo net per show at steady state  ·  "
+            f"{_money_or(roi['per_viewer_net_cents'], 'no viewers')} per viewer\n"
+            f"Cost per install  "
+            f"{_money_or(roi['cost_per_install_cents'], 'no installs')} of kit per year-one "
+            f"install  vs  {fmt_money(cpi_cents)} paid CPI\n"
+            f"Payback           kit {_month(roi['payback']['kit_month'], horizon)}  ·  "
+            f"slip {slip_payback}  ·  "
+            f"project {_month(roi['payback']['project_month'], horizon)}\n"
+            f"Baseline          {baseline_line}\n"
+            f"\n[dim]{roi['note']}[/]",
+            title="ROI — the kit, on show-driven revenue", border_style="green",
+        )
+    )
+
+    # --- power ---
+    power = report["power"]
+    table = Table("load", "watts", title="\nPower")
+    for load in power["loads"]:
+        table.add_row(load["name"], f"{load['watts']:g}")
+    table.add_row("[bold]Studio[/]", f"[bold]{power['studio_w']:g}[/]")
+    table.add_row("[dim]at the battery[/]", f"[dim]{power['dc_w']:g}[/]")
+    console.print(table)
+    console.print(
+        f"  A {power['show_hours']:g}h set              {power['session_kwh']:.2f} kWh of "
+        f"{power['usable_kwh']:.2f} usable  ·  {_pct(power['session_share_of_solar_day'])} "
+        f"of a {power['harvest_high_kwh']:.1f} kWh solar day"
+    )
+    console.print(
+        f"  On the bank alone     {power['hours_on_bank']:.1f}h = {power['shows_on_bank']:.1f} "
+        f"sets  ·  {power['hours_on_bank_with_ac']:.1f}h with the AC running"
+    )
+    console.print(
+        f"  Inverter              {_pct(power['inverter_utilisation'])} of "
+        f"{power['inverter_watts_continuous']:g} W  ·  "
+        f"{_pct(power['inverter_utilisation_with_ac'])} with the AC  ·  "
+        f"generator leg {_pct(power['generator_utilisation_with_ac'])}"
+    )
+
+    # --- uplink ---
+    uplink = report["uplink"]
+    table = Table(
+        "profile", "bitrate", "required", "margin low", "margin high", "verdict",
+        title=f"\nUplink — Starlink {uplink['upload_low_mbps']:g}–{uplink['upload_high_mbps']:g} "
+              f"Mbps up, ×{uplink['headroom']:g} headroom, "
+              f"captions {uplink['caption_latency_ms']} ms",
+    )
+    palette = {"clear": "green", "conditional": "yellow", "blocked": "red"}
+    for profile in uplink["profiles"]:
+        table.add_row(
+            profile["name"], f"{profile['bitrate_mbps']:g} Mbps",
+            f"{profile['required_mbps']:g} Mbps", f"{profile['margin_low_mbps']:+g}",
+            f"{profile['margin_high_mbps']:+g}",
+            f"[{palette[profile['verdict']]}]{profile['verdict']}[/]",
+        )
+    console.print(table)
+
+    # --- kit ---
+    # The priced list, what the ledger says is already bought, and the capital
+    # the studio inherits from the refit — priced only once the ledger
+    # attributes it, never guessed.
+    inherited = report["inherited"]
+    table = Table(
+        "item", "price", "basis",
+        title=f"\nKit — {fmt_money(kit['planned_cents'])} planned, "
+              f"{fmt_money(kit['recorded_cents'])} bought",
+    )
+    for item in kit["planned"]:
+        table.add_row(item["name"], fmt_money(item["cents"]), f"[dim]{item['note']}[/]")
+    table.add_row("[bold]Planned[/]", f"[bold]{fmt_money(kit['planned_cents'])}[/]",
+                  "[dim]the purchase list; payback and ROI are measured against it[/]")
+    if kit["recorded"]:
+        for line in kit["recorded"]:
+            table.add_row(f"  {escape(line['description'][:48])}", fmt_money(line["cents"]),
+                          "[green]bought[/] — a ledger line that matches the kit")
+        table.add_row("[bold]Bought[/]", f"[bold]{fmt_money(kit['recorded_cents'])}[/]", "")
+    else:
+        table.add_row("  [dim]nothing in the ledger matches the kit yet[/]", fmt_money(0), "")
+    if inherited["attributed_cents"]:
+        for system in inherited["attributed"]:
+            if system["key"] in STUDIO_CAPITAL_SYSTEMS and system["cents"]:
+                table.add_row(f"  {system['name']}", fmt_money(system["cents"]),
+                              "[cyan]inherited[/] — bought for the boat, attributed in the "
+                              "ledger; not part of the kit")
+        table.add_row("[bold]Inherited A/V & connectivity[/]",
+                      f"[bold]{fmt_money(inherited['attributed_cents'])}[/]",
+                      "[dim]already aboard; never summed into the kit[/]")
+    console.print(table)
+    if inherited["note"]:
+        console.print(f"  [dim]{inherited['note']}[/]")
+
+    # --- funnel ---
+    v = {key: entry["value"] for key, entry in funnel["inputs"].items()}
+    src = {key: entry["source"] for key, entry in funnel["inputs"].items()}
+    monthly, arpu = funnel["monthly"], funnel["arpu_by_segment"]
+    conv = report["lyricshow"]["conversation_mode"]
+    # Two audiences (stream, dock) and two segments by need (travelers,
+    # performers), kept apart until the end: each total row carries the split
+    # and the indented rows say where each half came from. The dock crowd are
+    # travelers — they had the two-language demo in person — so the dock
+    # installs sit inside the travelers' row, paid at the traveler rate.
+    travelers_from_stream = monthly["installs_travelers"] - monthly["installs_event"]
+    # Partner viewers are a third source, counted before the split: the
+    # counted partners' audience keys and the hypothetical switch are the
+    # sources of that row, so a what-if on the switch reads as an override.
+    counted = [row for row in reach["partners"] if row["active"]]
+    partner_sources = [src[_partner_audience_key(PARTNER_BY_KEY[row["key"]])]
+                       for row in counted] + [src["partners_include_hypothetical"]]
+    table = Table("stage", "per month", "how", "source", title="\nFunnel")
+    table.add_row(
+        "Viewers", f"{monthly['viewers']:g}",
+        f"{monthly['viewers_stream']:g} stream + {monthly['viewers_event']:g} event + "
+        f"{monthly['viewers_partner']:g} partner",
+        _sources(src["viewers_per_show"], src["shows_per_month"],
+                 src["event_viewers_multiplier"], src["events_per_month"], *partner_sources),
+    )
+    table.add_row(
+        "  stream", f"{monthly['viewers_stream']:g}",
+        f"{v['viewers_per_show']:g} per show × {v['shows_per_month']:g} shows",
+        _sources(src["viewers_per_show"], src["shows_per_month"]),
+    )
+    table.add_row(
+        "  event", f"{monthly['viewers_event']:g}",
+        f"{v['viewers_per_show']:g} × {v['event_viewers_multiplier']:g} per night × "
+        f"{v['events_per_month']:g} nights",
+        _sources(src["viewers_per_show"], src["event_viewers_multiplier"],
+                 src["events_per_month"]),
+    )
+    by_partner = " + ".join(f"{_count(row['viewers_per_month'])} {row['name']}"
+                            for row in counted)
+    table.add_row(
+        "  partner", f"{monthly['viewers_partner']:g}",
+        (f"{len(counted)} counted partner stream(s): {by_partner} — see Reach" if counted
+         else "no partner counted — see Reach"),
+        _sources(*partner_sources),
+    )
+    table.add_row(
+        "  travelers", f"{monthly['travelers_viewers']:g}",
+        f"{v['traveler_share'] * 100:.0f}% of viewers — the need is Conversation Mode",
+        _sources(src["traveler_share"]),
+    )
+    table.add_row(
+        "  performers", f"{monthly['performers_viewers']:g}",
+        f"the other {(1 - v['traveler_share']) * 100:.0f}% — streamers, worship teams, "
+        f"the original funnel",
+        _sources(src["traveler_share"]),
+    )
+    table.add_row(
+        "Attendees", f"{monthly['attendees']:g}",
+        f"{v['dock_attendees_per_event']:g} on the dock × {v['events_per_month']:g} nights "
+        f"— travelers, with the demo in front of them",
+        _sources(src["dock_attendees_per_event"], src["events_per_month"]),
+    )
+    table.add_row(
+        "Installs", f"{monthly['installs']:g}",
+        f"{monthly['installs_stream']:g} stream + {monthly['installs_event']:g} dock",
+        _sources(src["traveler_viewer_to_install"], src["viewer_to_install"],
+                 src["attendee_to_install"]),
+    )
+    table.add_row(
+        "  travelers", f"{monthly['installs_travelers']:g}",
+        f"{travelers_from_stream:g} stream ({v['traveler_viewer_to_install'] * 100:.1f}% of "
+        f"{monthly['travelers_viewers']:g} traveler viewers) + {monthly['installs_event']:g} "
+        f"dock ({v['attendee_to_install'] * 100:.1f}% of {monthly['attendees']:g} attendees)",
+        _sources(src["traveler_viewer_to_install"], src["attendee_to_install"]),
+    )
+    table.add_row(
+        "  performers", f"{monthly['installs_performers']:g}",
+        f"{v['viewer_to_install'] * 100:.1f}% of {monthly['performers_viewers']:g} "
+        f"performer viewers",
+        _sources(src["viewer_to_install"]),
+    )
+    table.add_row(
+        "New paid", f"{monthly['new_paid']:g}",
+        f"{monthly['new_paid_travelers']:g} travelers + "
+        f"{monthly['new_paid_performers']:g} performers",
+        _sources(src["traveler_install_to_paid"], src["install_to_paid"]),
+    )
+    table.add_row(
+        "  travelers", f"{monthly['new_paid_travelers']:g}",
+        f"{v['traveler_install_to_paid'] * 100:.1f}% of {monthly['installs_travelers']:g} "
+        f"traveler installs → Base + Conversation Mode",
+        _sources(src["traveler_install_to_paid"]),
+    )
+    table.add_row(
+        "  performers", f"{monthly['new_paid_performers']:g}",
+        f"{v['install_to_paid'] * 100:.1f}% of {monthly['installs_performers']:g} "
+        f"performer installs",
+        _sources(src["install_to_paid"]),
+    )
+    # Each plan's month is priced as subscribers pay it: the segment's annual
+    # share at the annual price ÷ 12, the rest at list. The plan's share of all
+    # new paid is derived from the two segments' volumes — the true mix — and
+    # a performer plan also shows its declared share within the performer
+    # segment. The store's annual price is shown only where the store has one
+    # for that plan: the featured bundle has its own, the Pro Broadcast add-on
+    # is monthly only.
+    store_plans = report["lyricshow"]["plans"]
+    for plan in funnel["by_plan"]:
+        store = store_plans.get(plan["key"])
+        if plan["segment"] == "traveler":
+            within, annual_src = "all travelers", src["traveler_annual_share"]
+            billing = f"{fmt_money(conv['bundle_annual_cents'])}/yr, the featured bundle"
+        else:
+            within = f"{plan['mix_share'] * 100:.0f}% of performers"
+            annual_src = src["annual_share"]
+            if store is not None and store.get("annual_cents"):
+                billing = f"{fmt_money(store['annual_cents'])}/yr"
+            elif plan["annual_cents"] is None:
+                billing = "monthly only"
+            else:
+                billing = "annual on the tier, the add-on monthly"
+        table.add_row(
+            f"  {plan['name']}", f"{plan['new_subscribers']:g}",
+            f"{plan['share'] * 100:.1f}% of new paid ({within}) at "
+            f"{fmt_money(plan['price_cents'])}/mo blended "
+            f"(list {fmt_money(plan['list_monthly_cents'])}/mo · {billing})",
+            _sources(annual_src),
+        )
+    table.add_row(
+        "Steady subscribers", f"{steady['subscribers']:g}",
+        f"{steady['subscribers_travelers']:g} travelers + "
+        f"{steady['subscribers_performers']:g} performers — each segment's new paid ÷ "
+        f"its own churn",
+        _sources(src["traveler_monthly_churn"], src["monthly_churn"]),
+    )
+    table.add_row(
+        "  travelers", f"{steady['subscribers_travelers']:g}",
+        f"{monthly['new_paid_travelers']:g} new paid ÷ "
+        f"{v['traveler_monthly_churn'] * 100:.1f}% monthly churn — trips end",
+        _sources(src["traveler_monthly_churn"]),
+    )
+    table.add_row(
+        "  performers", f"{steady['subscribers_performers']:g}",
+        f"{monthly['new_paid_performers']:g} new paid ÷ "
+        f"{v['monthly_churn'] * 100:.1f}% monthly churn",
+        _sources(src["monthly_churn"]),
+    )
+    table.add_row(
+        "MRR net", fmt_money(steady["mrr_net_cents"]),
+        f"{fmt_money(funnel['arpu_gross_cents'])} blended ARPU over all new paid, less "
+        f"{v['store_commission'] * 100:.0f}% store commission",
+        _sources(src["traveler_annual_share"], src["annual_share"], src["store_commission"]),
+    )
+    table.add_row(
+        "  travelers", fmt_money(steady["mrr_net_travelers_cents"]),
+        f"{fmt_money(arpu['travelers'])} ARPU on Base + Conversation Mode, "
+        f"{v['traveler_annual_share'] * 100:.0f}% on annual billing",
+        _sources(src["traveler_annual_share"]),
+    )
+    table.add_row(
+        "  performers", fmt_money(steady["mrr_net_performers_cents"]),
+        f"{fmt_money(arpu['performers'])} ARPU across the performer plans, "
+        f"{v['annual_share'] * 100:.0f}% on annual billing",
+        _sources(src["annual_share"]),
+    )
+    console.print(table)
+    # Who buys, in two sentences. The traveler rates are the owner's premise —
+    # every traveler met so far says they would pay for Conversation Mode —
+    # declared as assumptions like every other rate, so the product printed
+    # here follows the table above and any override. Broken into lines by
+    # hand so each phrase prints whole.
+    travelers_subscribe = v["traveler_viewer_to_install"] * v["traveler_install_to_paid"]
+    pad = " " * 12
+    console.print(
+        f"  [bold]Who buys[/]  Travelers first — anyone across a language line who sees "
+        f"two-language captions on screen and wants Conversation Mode on a phone of their own:\n"
+        f"{pad}{v['traveler_share'] * 100:.0f}% of the audience "
+        f"(traveler_share: {_sources(src['traveler_share'])}), of whom "
+        f"{v['traveler_viewer_to_install'] * 100:.1f}% install and "
+        f"{v['traveler_install_to_paid'] * 100:.1f}% pay — "
+        f"{travelers_subscribe * 100:.1f}% of traveler viewers subscribing,\n"
+        f"{pad}the owner's premise declared as the traveler_* assumptions and as arguable as "
+        f"every other rate.\n"
+        f"{pad}Performers second — streamers, worship teams, the original funnel: the other "
+        f"{(1 - v['traveler_share']) * 100:.0f}%, at "
+        f"{v['viewer_to_install'] * 100:.1f}% install, {v['install_to_paid'] * 100:.1f}% pay "
+        f"and {v['monthly_churn'] * 100:.1f}% churn on the performer plans."
+    )
+
+    # --- reach and the target ---
+    # Who the overlay is in front of beyond the boat, and the owner's target
+    # read against the trajectory — both from the same effective inputs the
+    # funnel ran on, so nothing here is a second model.
+    _print_reach(report)
+    _print_target(report)
+
+    # --- lenses ---
+    lenses = report["lenses"]
+    sub, acq, cat = lenses["subscription"], lenses["acquisition_displaced"], lenses["catalog"]
+    console.print("\n[bold]Return — three figures, reported separately[/]")
+    console.print(
+        f"  Subscription           [green]{fmt_money(sub['steady_mrr_net_cents'])}/mo[/] net at "
+        f"steady state, {fmt_money(sub['steady_arr_net_cents'])}/yr"
+    )
+    # The same steady state by segment — two needs, two churns, two prices —
+    # so the reader can see which share carries the month; the line above is
+    # their sum and nothing else.
+    seg = sub["by_segment"]
+    console.print(
+        f"                         travelers {seg['travelers']['steady_subscribers']:g} "
+        f"subscribers, {fmt_money(seg['travelers']['steady_mrr_net_cents'])}/mo · "
+        f"performers {seg['performers']['steady_subscribers']:g} subscribers, "
+        f"{fmt_money(seg['performers']['steady_mrr_net_cents'])}/mo"
+    )
+    if sub["month_12"]:
+        m12 = sub["month_12"]
+        show_driven = ""
+        if m12["baseline_subscribers"]:
+            show_driven = (f" — of which {m12['show_driven_subscribers']:g} subscribers and "
+                           f"{fmt_money(m12['show_driven_cumulative_net_cents'])} are show-driven")
+        console.print(
+            f"                         month 12: {m12['subscribers']:g} subscribers, "
+            f"{fmt_money(m12['mrr_net_cents'])}/mo, "
+            f"{fmt_money(m12['cumulative_net_cents'])} cumulative{show_driven}"
+        )
+    console.print(
+        f"  Acquisition displaced  {acq['installs_per_month']:g} installs/mo × "
+        f"{fmt_money(acq['cpi_cents'])} CPI = [green]{fmt_money(acq['monthly_cents'])}/mo[/], "
+        f"{fmt_money(acq['annual_cents'])}/yr"
+    )
+    console.print(
+        f"  Catalog                {cat['songs_per_month']:g} songs/mo, "
+        f"{cat['songs_per_year']:g}/yr — [yellow]not priced[/]. {cat['note']}."
+    )
+    for line in lenses["excluded"]:
+        console.print(f"  [dim]Excluded — {line}[/]")
+
+    # --- competition night ---
+    # The setting the app is sold in, not a lens: the three stages, one night's
+    # flow with the steps where Lyric Show is on screen marked, and Paradise
+    # Busker's own facts. Nothing printed here is summed into the return.
+    comp = report["competition"]
+    console.print("\n[bold]Competition night — Paradise Busker × Key West Treasure Hunt[/]")
+    for stage in comp["stages"]:
+        console.print(
+            f"  [bold]{stage['name']:<14}[/] {stage['where']} · holds {stage['holds']} · "
+            f"{stage['camera']} · [dim]{stage['note']}[/]"
+        )
+    console.print("  [cyan]◆[/] marks a step with Lyric Show on screen — that is what sells it")
+    for number, step in enumerate(comp["flow"], start=1):
+        mark = "[cyan]◆[/]" if step["product"] else "[dim]·[/]"
+        console.print(f"  {number}. {mark} [bold]{step['step']}[/] — {step['role']}: "
+                      f"{step['detail']}")
+    facts = comp["facts"]
+    treasures, codex, membership = facts["treasures"], facts["codex"], facts["membership_cents"]
+    table = Table("fact", "value", title="\nParadise Busker — the facts, from the sources")
+    table.add_row("Tipping", f"{_pct(facts['tipping_artist_share'])} to the artist\n"
+                             f"[dim]{facts['tipping_table_note']}[/]")
+    table.add_row("Voting", facts["voting"])
+    # The round mechanics come from the deck rather than the white paper; the
+    # module carries them when it has them, and the table shows them then.
+    if facts.get("competition"):
+        round_ = facts["competition"]
+        table.add_row("The round", f"{' · '.join(round_['votes'])}; "
+                                   f"{fmt_money(round_['vote_price_cents'])} a vote, "
+                                   f"{_pct(round_['grand_prize_share'])} of the pool to the "
+                                   f"Grand Prize")
+    table.add_row("Treasures", f"proof of attendance: {' + '.join(treasures['proof'])}; "
+                               f"tiers {' / '.join(treasures['tiers'])}")
+    if facts.get("ar_booths"):
+        table.add_row("AR booths", facts["ar_booths"])
+    table.add_row("Codex Engine", f"lyrics scored {codex['score_split']}; "
+                                  f"{_pct(codex['threshold'])} or better qualifies")
+    table.add_row("Membership",
+                  f"{fmt_money(membership['low'])}–{fmt_money(membership['high'])} a month")
+    table.add_row("Tithe", f"{_pct(facts['tithe_of_net_profit'])} of net profit to charity")
+    table.add_row("The coin", facts["coin"])
+    table.add_row("Series", facts["series"])
+    console.print(table)
+    console.print(f"  [dim]Sources: {facts['source']}[/]")
+
+    # --- recorded shows ---
+    console.print("\n[bold]Recorded shows[/]")
+    if recorded["shows"]:
+        table = Table("date", "kind", "platform", "title", "min", "peak", "unique", "dock",
+                      "installs")
+        # Titles, platforms and dates are the user's strings: escaped, never
+        # parsed as markup.
+        for row in recorded["rows"]:
+            table.add_row(
+                escape(row["performed_at"] or "—"), escape(row["kind"]),
+                escape(row["platform"] or "—"), escape((row["title"] or "—")[:32]),
+                _num(row["duration_minutes"]), _num(row["peak_viewers"]),
+                _num(row["unique_viewers"]), _num(row["attendees"]),
+                _num(row["installs_attributed"]),
+            )
+        console.print(table)
+        # Each observed figure names the rows it is drawn from: an average over
+        # the sets that were counted is not the total divided by every show.
+        sets = recorded["shows"] - recorded["competitions"]
+        nights = recorded["competitions"]
+        rate = recorded["observed_viewer_to_install"]
+        multiple = recorded["observed_event_multiplier"]
+        console.print(
+            f"  {recorded['shows']} show(s), {recorded['competitions']} competition night(s) · "
+            f"{_num(recorded['unique_viewers'])} unique viewers · "
+            f"{_num(recorded['installs'])} installs logged"
+        )
+        console.print(
+            f"  observed  {_num(recorded['observed_viewers_per_show'])} viewers per counted show "
+            f"({recorded['viewers_counted_shows']} of {sets} sets counted) · "
+            f"{'—' if rate is None else f'{rate * 100:.1f}%'} install rate "
+            f"(from {recorded['install_rate_shows']} set(s) with both counts) · "
+            f"{_num(recorded['observed_attendees_per_event'])} on the dock per counted night "
+            f"({recorded['attendees_counted_nights']} of {nights} counted)"
+        )
+        if nights:
+            console.print(
+                f"            {_num(recorded['observed_event_viewers_per_night'])} viewers per "
+                f"counted night ({recorded['event_viewers_counted_nights']} of {nights} counted)"
+                + (f" → ×{multiple:g} a counted set's audience" if multiple is not None
+                   else " → no counted set to compare against; the declared multiple stands")
+            )
+        for item in recorded["ignored_observations"]:
+            console.print(
+                f"  [yellow]ignored[/] {item['key']} = {item['value']:g}: {item['reason']}")
+    else:
+        console.print(
+            "  [dim]No shows recorded yet — figures are modeled. Record one with:[/]\n"
+            "  [dim]okey log show --date 2026-08-22 --platform youtube --title \"Set one\" "
+            "--minutes 110 --peak 80 --unique 140 --installs 6[/]\n"
+            "  [dim]okey log show --kind competition --date 2026-08-29 --platform youtube "
+            "--title \"Busker night\" --unique 300 --attendees 55 --installs 9[/]"
+        )
+
+    if assumptions:
+        table = Table("assumption", "value", "basis", "source", title="\nStudio assumptions")
+        for key, meta in report["assumptions"].items():
+            table.add_row(key, f"{meta['value']:g}", meta["note"], _sources(meta["source"]))
+        console.print(table)
+    else:
+        console.print("\n[dim]Run with --assumptions to see the numbers behind these.[/]")
+
+    if html:
+        console.print(f"\n[green]page written to[/] {escape(html)}")
 
 
 @report_app.command("spec")
