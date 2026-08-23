@@ -85,6 +85,10 @@ class Database:
         ("line_items", "insurable", "INTEGER"),
         ("orders", "vessel", "TEXT"),
         ("orders", "reference", "TEXT"),
+        # show_log grew its competition columns after the table first shipped on
+        # the studio branch; a database created in between gets them here.
+        ("show_log", "kind", "TEXT NOT NULL DEFAULT 'set'"),
+        ("show_log", "attendees", "INTEGER"),
     )
 
     def migrate(self) -> None:

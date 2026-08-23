@@ -101,28 +101,13 @@ distinguishes "fails under every estimate" from "fails under the pessimistic
 one" — collapsing those would either overstate certainty or hide a real risk
 behind a favourable assumption.
 
-## The review UI
+## Human review
 
-The queue is the gate every downstream figure depends on, so clearing it has to
-be fast. `/review` is one item at a time, keyboard-driven, served from the same
-FastAPI app with no build step.
-
-Three decisions worth recording:
-
-**Undo restores a full snapshot, not just the value.** `POST /api/review/decide`
-returns the prior state of every row it touched, and `restore` writes it back
-verbatim — including `relevance_by` and `classified_by`. Restoring only the
-value would leave a `manual` marker on an item nobody decided, permanently
-freezing it against the rules and LLM passes.
-
-**Whole-order decisions touch only unresolved siblings.** An Amazon order is
-usually entirely boat or entirely personal, so `apply_to_order` handles the
-common case in one keystroke — but it skips any sibling already decided by
-hand, so a bulk call can never overwrite an individual judgement.
-
-**Mutating endpoints reject cross-site requests.** The server binds to
-localhost, but any page open in the browser can POST there, and these endpoints
-write to the ledger. Origin and `Sec-Fetch-Site` are both checked.
+The queue is the gate every downstream figure depends on. It is cleared from the
+CLI (`okey review`, `okey review --item N --mark boat --system …`); manual
+verdicts are final, and neither the rules nor the LLM pass will overwrite them.
+The web dashboard is read-only — it shows the queue but does not change the
+ledger.
 
 ## Known limitations
 
@@ -167,3 +152,80 @@ twice, once as resale value and once as use.
 Capability figures read the same `load_spec` the risk checks use, so the
 capability panel and the risk findings are incapable of disagreeing about the
 vessel.
+
+## The floating studio
+
+`analysis/studio.py` treats the vessel as a production stage: a livestreamed
+set, audio through an Audient iD4 mkII, live lyrics from Lyric Show composited
+through its OBS overlay, and the stream as the app's marketing. It follows the
+reward module's rules rather than inventing its own.
+
+Power and uplink are arithmetic from the installed specification — the same
+`load_spec` and efficiency assumptions the risk checks and the capability lens
+read, so a show's power figures cannot disagree with the rest of the project
+about the same battery. The kit is a price list checked against the ledger.
+The return is a *model*: a chain of conversion rates declared in one
+`STUDIO_ASSUMPTIONS` table, every one of them arguable, resolved through the
+same ladder as the spec (declared → `project_meta` → explicit override), with
+each funnel input reporting where its value came from.
+
+Three return lenses, returned as three keys and never summed. Subscription
+revenue is recurring money; acquisition displaced is a cost not incurred; the
+catalog of recorded performances is an asset nobody here can price, so it is
+counted in songs and marked unpriced. A "total return" would add a revenue
+stream to an avoided cost to a thing with no price — three units in one number
+— and a test pins its absence, for the same reason the reward test does.
+
+**Recorded beats modeled.** `show_log` holds what the shows actually did; from
+the first row, the observed viewers per set, the observed stream install rate,
+the observed competition multiple and the counted dock crowd replace the
+assumed inputs — each drawn only from the rows that can support it (the rate
+from sets with both counts on the same set; the per-set average without the
+competition nights' multiplied audience) and each saying how many rows that
+was. NULL counts stay NULL, because "no installs were attributed" and "nobody
+wrote the number down" are different statements; an observation outside the
+range an override is held to is reported and ignored, never modeled. Inherited
+capital — Starlink, the cameras, the sound system — is reported as unpriced
+until the ledger attributes spend to A/V or connectivity, rather than guessed
+at.
+
+**Attendees are a second audience, not more viewers.** A competition night puts
+a crowd on the rear dock, and a dock is not a stream: the attendee stands in
+front of the captions with the QR on the overlay and a phone in hand, so their
+install rate is its own declared assumption and the two audiences stay apart all
+the way to installs, summed only then — a blended rate would hide which audience
+a number came from. What the competition itself earns is Paradise Busker's
+economy: reported as the setting, never summed into the return.
+
+**Two segments by need.** `traveler_share` of any audience is there for
+Conversation Mode and the rest are performers, the original funnel; each has
+its own install rate, paid rate, plan (the Base + Conversation Mode bundle
+against the performer mix), annual share and churn, runs to its own steady
+state and is summed only there, with plan shares derived from the volumes. The
+traveler rates carry the stated 1%-of-viewers premise as declared
+assumptions. The dock counts as travelers: an attendee had the two-language
+demo in person, so dock installs pay at the traveler rate and land on the
+bundle, and a test pins that `traveler_share` 0 leaves the performer funnel.
+
+**Reach and the target.** Partners are rows of data in `PARTNERS`, committed
+first; each names the one assumption holding its audience figure, its streams a
+month and a declared international share. Committed partners are counted by
+default, hypothetical ones only when `partners_include_hypothetical` is 1;
+counted viewers join the stream audience before the traveler/performer split,
+so `reach` and `funnel` cannot disagree. A figure the machine cannot read is a
+labelled estimate (`placeholder` True on the row) until `okey studio partner`
+writes `studio.partner_<key>_…` to `project_meta`. `target` reads the stated
+target against the rounded trajectory — standing, reached month or None,
+shortfall, and the closed-form new paid and viewers a month it would take at
+the traveler churn and current yield; a target of 0 is no target.
+
+**Payback counts show-driven revenue only.** The trajectory can start at a
+declared baseline — today's paying subscribers, entered with `okey studio
+baseline` because the stores and Firestore hold the real figure and 0 reads as
+"not entered" — but the baseline, a mixed book nobody has split by need,
+decays at the performer churn and earns the blended ARPU (stated, not hidden),
+its remainder is subtracted from every row, and kit payback, slip coverage,
+project payback and the ROI multiples are read off the show-driven columns.
+The studio cannot claim to have paid for itself with subscribers it did not
+bring: a large baseline moves the book, never the kit's return, and a test pins
+that the breakeven months do not move when the baseline does.

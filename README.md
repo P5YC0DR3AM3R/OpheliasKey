@@ -130,11 +130,20 @@ okey report cost           # spend by system, vendor, month
 okey report risk           # findings, most severe first
 okey report spec           # engineering risk from the installed specification
 okey report reward         # what the spending actually returned
+okey report studio         # the boat as a floating studio: power, uplink, kit, return, ROI
+okey report studio --assumptions --html studio.html   # every rate, and a standalone page
+okey studio baseline --subscribers 120   # paying subscribers today, from the stores — where the trajectory starts
 okey report insurance --pdf out.pdf   # equipment + professional install, for an insurer
 okey add invoice 2414.06 --vendor "Poseidon Marine" --system professional_install \
     --date 2026-07-31 --ref 1199 --note "Service invoice" 
 okey log labor 12 --system electronics_nav --note "GO9 install"
 okey log nights 14 --from 2026-07-01
+okey log show --date 2026-08-22 --platform youtube --unique 140 --installs 6
+okey log show --kind competition --unique 300 --attendees 55 --installs 9   # a Paradise Busker night
+okey report studio --events 4 --attendees 200   # a busier month of competition nights
+okey report studio --traveler-share 0.5 --traveler-paid 0.1   # a what-if on who buys
+okey report studio --with-hypothetical --target 10000 --target-month 3   # count the partner artist; a different target
+okey studio partner church --live-viewers 3200   # a partner channel's audience, from its analytics
 okey report unclassified   # items awaiting attribution
 okey status                # ingestion and processing state
 okey serve                 # local dashboard
@@ -163,26 +172,7 @@ Two independent questions, answered in three passes.
    low-confidence. Manual verdicts are final — neither rules nor the LLM will
    overwrite them.
 
-The fastest way to clear it is the browser UI — `okey serve`, then
-**http://127.0.0.1:8000/review**. One item at a time, entirely keyboard-driven:
-
-| Key | Action |
-|---|---|
-| <kbd>B</kbd> | Mark boat, with the selected system |
-| <kbd>P</kbd> | Mark personal |
-| <kbd>S</kbd> | Focus the system picker |
-| <kbd>O</kbd> | Apply the next decision to every unresolved item in the same order |
-| <kbd>J</kbd> / <kbd>K</kbd> | Skip forward / back |
-| <kbd>Z</kbd> | Undo |
-
-Each item shows quantity, unit and line price, vendor, order date, and the
-LLM's call with its reasoning. The system picker pre-selects whatever the
-classifier suggested, so a correct guess is one keystroke to confirm. Undo
-restores the *exact* prior state — including which pass made the original call
-— so an undone decision does not leave a `manual` marker behind that would
-freeze the item against re-classification.
-
-The CLI equivalent, for scripting:
+Clear it from the CLI:
 
 ```bash
 okey review                                              # see the queue
@@ -252,7 +242,7 @@ adding them would double-count:
 
 | Lens | What it answers | Source |
 |---|---|---|
-| Recoverable vs sunk | What a buyer plausibly pays for, and what is gone | Declared per-system recovery rates |
+| Recoverable vs startup investment | What a buyer plausibly pays for, and what it took to start | Declared per-system recovery rates |
 | Labor avoided | Work performed instead of purchased | **Recorded** hours — never estimated |
 | Capability delivered | Days of autonomy, AC runtime, $/kWh, $/W at real output | The same spec the risk checks read |
 | Use value | Cost per night aboard, and break-even against the alternative | **Recorded** nights aboard |
@@ -263,7 +253,7 @@ Two deliberate constraints:
 manufacture return out of nothing, so both come from `okey log`. With nothing
 logged, the report says so rather than inventing a figure.
 
-**Use value amortizes the sunk portion only.** The recoverable portion is not
+**Use value amortizes the startup-investment portion only.** The recoverable portion is not
 consumed by using the boat, so charging it against nights aboard would
 double-count it.
 
@@ -272,6 +262,148 @@ Recovery rates are heuristics with wide error bars — electronics date fastest
 They live in one declared table with a stated basis per system, visible via
 `okey report reward --assumptions`, for the same reason the specification
 assumptions do: a number you cannot see is a number you cannot argue with.
+
+## Floating studio
+
+The boat is also a stage. Songwriters perform aboard, the set is livestreamed
+over the Starlink already fitted, the audio runs through an Audient iD4 mkII,
+and live lyrics from **Lyric Show** — the caption and translation app — are composited
+onto the stream through its OBS browser-source overlay. The stream is the
+marketing: viewers watch the overlay work and install the app — and the buyer
+is the traveler, anyone across a language line who sees two-language captions
+on screen and wants Conversation Mode on a phone of their own.
+
+`okey report studio` answers four questions, separately, and states which of
+them it can actually answer:
+
+| Question | Source |
+|---|---|
+| Can the bank power a show, and how many? | The same `load_spec` the risk checks read — arithmetic |
+| Can Starlink carry the stream? | Declared upload range against encoder bitrate, with stated headroom |
+| What does the studio cost beyond what is aboard? | A priced kit list, checked against the ledger |
+| What does a show plausibly return? | A **model** — declared conversion rates, replaced by recorded shows |
+
+The return comes in three figures that are **reported separately**:
+subscription revenue is recurring money, paid installs displaced is a cost not
+incurred, and the catalog of recorded performances is an asset the module
+does not price. Adding them would put three units in one number; a test pins
+the absence of a combined figure, as it does for reward.
+
+**Who buys.** Two segments, by need, each with its own conversion rates, plan
+and churn, kept apart all the way to the steady state and summed only there.
+Travelers come first: the owner has been told by every traveler met so far
+that the on-screen instant translation of Conversation Mode is what they would
+subscribe for, and the model carries that premise as declared, arguable
+assumptions rather than a fact — 70% of any audience is there for Conversation
+Mode (`traveler_share`), 4% of them install after seeing two-language captions
+on screen (`traveler_viewer_to_install`) and 25% of those start the featured
+Base + Conversation Mode bundle within 30 days (`traveler_install_to_paid`); the
+two rates multiply to the stated 1% of viewers becoming subscribers, the
+report prints that product under the funnel, and `--traveler-share 0` shows
+what is left without them. The dock crowd at a competition night are travelers
+too: they had the two-language demo in person, so their installs pay at the
+traveler rate and land on the bundle. Performers — streamers, worship teams,
+the original funnel — are the second segment, on the original rates and the
+original plans.
+
+**Realistic defaults.** The performer rates are benchmarks, each noted as such
+in the assumption table: 2.5% of performer-share stream viewers install after
+an explicit on-screen ask (passive click-to-install runs 1–3%), 5% of installs
+start a paid plan within 30 days (freemium utility apps convert 2–5%), 12% of
+dock attendees install with the QR in front of them, and 35% of paying
+performers are on annual billing, priced at the annual price ÷ 12 — 60% of
+travelers, who plan trips ahead; travelers churn at 6% a month between trips,
+performers at 8%. Plan prices are facts, not assumptions — Base $14.99/mo ·
+$99.99/yr, Ultimate $49.99/mo · $399.99/yr, Pro Broadcast $39.99/mo as an
+add-on, Conversation Mode $4.99/mo · $39.99/yr and the Base + Conversation Mode
+bundle $19.98/mo · $139.98/yr — verified live against
+<https://lyricshow.live/pricing> on 2026-08-22 and read from the app's own
+tier file, so a price change belongs in one place. On the boat alone — the
+partner audience below entered as 0 — 1,200 viewers a month are 840 travelers
+and 360 performers, 57 installs become 12.45 new subscribers (12 of them on
+the bundle), the steady state is 205.6 subscribers — 200 travelers, 5.6
+performers — at a blended ARPU of $15.41 and $2,675.16/mo net, and the kit
+pays back in month 3. The declared defaults add the one committed partner and
+read 21,200 viewers, 2,632.7 steady subscribers and $34,519.72/mo — a headline
+that rests on an estimate, and says so.
+
+**Reach and the target.** The boat is not the only stage the overlay is on.
+Partner channels are data — one `PARTNERS` row each, committed first: the
+partner church, which already has the overlay and will caption its four Sunday
+live streams a month, and the partner artist, a Spanish-language artist with 6.19M
+YouTube subscribers who *might* stream a live set through it. A committed
+partner is counted by default; a prospective one is off until
+`--with-hypothetical` counts it. An artist's viewers a stream are subscribers ×
+`partner_live_share` (2%); a church's are its live viewers a stream — the partner
+church's figure is not on this machine, so it is a labelled **ESTIMATE**
+(5,000 a stream) until `okey studio partner church --live-viewers N`
+enters the channel's own number; the headline, the Reach panel and the row all
+say ESTIMATE until then. Partner viewers join the stream audience before the
+traveler/performer split and convert at the same rates; each row's abroad
+figure is its declared international share — declared, not measured — and the
+languages line (20 base · 80 in all) is why one stream reaches every country
+its audience is in. The target — 3,000 paying subscribers by month 3
+(`--target`, `--target-month`) — is read against the trajectory: where the book
+stands that month, when (if ever) it is reached, the shortfall, and what it
+would take at the current rates — new paid a month, viewers a month, and what
+that is per show at the current cadence. At the defaults it is 2,548.8 short;
+with the partner artist counted, 145,000 viewers a month reach it in month 3 — on track.
+
+**Baseline and ROI.** Today's paying subscribers live in App Store Connect,
+Google Play and the Firestore entitlements, not on this machine, so they are
+declared rather than read: `okey studio baseline --subscribers N` writes the
+figure, `--clear` forgets it, and 0 reads as *not entered*, not zero. The
+trajectory starts at the baseline, but kit payback, slip coverage, project
+payback and the ROI multiples are read off the **show-driven** columns — the
+baseline's own decaying remainder subtracted — because the studio cannot claim
+return from subscribers it did not bring; a large baseline moves the book,
+never the kit. The ROI panel prints the kit's multiple at month 12 and at the
+horizon, its share of project spend, net per show and per viewer, what the kit
+costs per year-one install against the $3.50 paid CPI, and the payback months.
+
+**Recorded beats modeled.** Every funnel input states whether it is `assumed`,
+`observed`, an `override`, or a `project_meta` correction. From the first show
+logged, the observed viewers per set, the observed stream install rate, the
+observed competition multiple and the counted dock crowd replace the assumed
+ones — each drawn only from the rows that support it (a set's
+install rate needs both counts on the same set; a competition night's audience
+is kept out of the per-set average), and each naming how many rows that was:
+
+```bash
+okey log show --date 2026-08-22 --platform youtube --title "Set one" \
+    --minutes 110 --peak 80 --unique 140 --installs 6
+```
+
+Leave a count out when nobody wrote it down — a missing number is not a zero,
+and the report keeps the difference; a negative count is refused at the prompt,
+and an observation outside the range an override is held to is listed as
+ignored and left out of the funnel. Every conversion rate lives in one declared
+table, visible with `--assumptions`, overridable per run (`--viewers`, `--shows`,
+`--install-rate`, `--paid-rate`, `--churn`, `--events`, `--attendees`,
+`--traveler-share`, `--traveler-paid`, `--with-hypothetical`,
+`--partner-live-share`, `--target`, `--target-month`) or
+permanently via `studio.<key>` in `project_meta`. The headline says which
+observable inputs are observed, modeled or overridden, so it can never disagree
+with the funnel's source column; the kit prints as a priced list with whatever
+ledger lines match it and the inherited A/V and connectivity spend once the
+ledger attributes it. The dashboard's **/studio** page shows the same report
+with sliders for the same inputs, and `--html studio.html` writes it as a
+standalone page that needs no server.
+
+**Competition nights.** The boat also hosts Paradise Busker song competitions.
+Acts rotate across three stages — the cockpit deck under the hardtop, the swim
+platform at the waterline, and the rear dock where the crowd stands, scans the
+QR and votes — and the same Lyric Show overlay that captions the stream
+captions the dock screen. One show, two audiences: viewers online and attendees
+on the pier, each converting at its own declared rate and kept apart all the
+way to installs. The report prints the night's flow — from the blind two-version
+round through the vote, the tip, proof of presence and the Codex score to the
+KEY WEST, PARADISE BUSKER coin — with the steps where Lyric Show is on screen
+marked, and Paradise Busker's facts cited to their sources. What the competition
+itself earns is its economy, not the studio's, and none of it is added to the
+return. Log a night with `okey log show --kind competition --attendees 55`; the
+counted crowd replaces the assumed one, and `--events` / `--attendees` are the
+per-run what-ifs.
 
 ## Insurance schedule
 
@@ -333,6 +465,4 @@ the estimate is never mistaken for the total.
 purchase history and never leaves the machine; the dashboard binds to
 `127.0.0.1` by default.
 
-The review endpoints mutate the ledger, and any page open in your browser can
-POST to localhost — so they reject cross-origin and cross-site requests rather
-than relying on the bind address alone.
+The dashboard is read-only; nothing in the browser can change the ledger.
