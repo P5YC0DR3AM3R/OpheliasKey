@@ -1,338 +1,333 @@
-# Ophelia's Key
+<!-- Animated Wave Header -->
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0B1E2A,50:17C3DE,100:0B1E2A&height=220&section=header&text=Ophelia%27s%20Key&fontSize=56&fontColor=A9E8F0&animation=fadeIn&fontAlignY=35&desc=Purchase%20Intelligence%20for%20the%20Ophelia%27s%20Key%20Vessel%20Project&descSize=17&descColor=8B949E&descAlignY=55" width="100%" alt="Ophelia's Key" />
+</p>
 
-Purchase intelligence for the Ophelia's Key boat project. Ingests every purchase
-from Gmail, Amazon Business and the bank, separates project spend from personal
-spend in a shared account, attributes each line item to a boat system, and
-reports cost, budget variance and risk.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python_3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+" />
+  <img src="https://img.shields.io/badge/Typer-1F9E89?style=for-the-badge&logo=typer&logoColor=white" alt="Typer" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Pydantic_v2-E92063?style=for-the-badge&logo=pydantic&logoColor=white" alt="Pydantic v2" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Anthropic-191919?style=for-the-badge&logo=anthropic&logoColor=white" alt="Anthropic" />
+  <img src="https://img.shields.io/badge/Google_API-EA4335?style=for-the-badge&logo=gmail&logoColor=white" alt="Google API" />
+  <img src="https://img.shields.io/badge/Plaid-000000?style=for-the-badge&logo=plaid&logoColor=white" alt="Plaid" />
+  <img src="https://img.shields.io/badge/Ruff-D7FF64?style=for-the-badge&logo=ruff&logoColor=black" alt="Ruff" />
+</p>
 
-**The vessel:** a liveaboard pleasure craft on Montana permanent registration
-(MT9740CA), with a substantial off-grid electrical system — a 4 kW solar array,
-15.36 kWh of LiFePO4 across an isolated 24V/12V split, a 4 kW hybrid inverter and
-an 8 kW backup generator, running Simrad GO9, radar, Starlink, NMEA 2000 and six
-4K cameras. The system taxonomy is built for that boat, not a generic one.
+<p align="center">
+  <a href="https://github.com/P5YC0DR3AM3R/OpheliasKey">Repository</a>
+  &nbsp;&bull;&nbsp;
+  Ingest, normalize, and analyze every dollar of a liveaboard refit
+</p>
 
-## Why it is built this way
+---
 
-**Raw capture is separate from parsing.** Every fetched email, API response and
-transaction is stored compressed and immutable in `raw_documents`. Orders and
-line items are *derived*. When a vendor parser improves, `okey parse --reparse`
-rebuilds everything from the raw store — the mailbox is never re-walked.
+**Ophelia's Key** (`okey`) is a command-line tool that turns the paper trail of a boat
+refit into a queryable ledger. It ingests every purchase from Gmail, Amazon Business
+and the bank (via Plaid), separates project spend from personal spend in a shared
+account, attributes each line item to a boat system, and reports cost, budget variance
+and risk.
 
-**Nothing is guessed.** A line item the classifier cannot place stays `NULL` and
-is reported as unclassified spend. An order that matches two candidate bank
-charges is left unreconciled. A wrong number in a cost analysis is worse than a
-missing one, because a missing one announces itself.
+It is built for one specific vessel — a liveaboard pleasure craft on Montana permanent
+registration (**MT9740CA**) with a substantial off-grid electrical system: a 4 kW solar
+array, 15.36 kWh of LiFePO4, a 4 kW hybrid inverter and an 8 kW backup generator,
+running Simrad GO9, radar, Starlink, NMEA 2000 and six 4K cameras. The system taxonomy
+is that boat, not a generic one.
 
-**The project total carries its own error bar.** The account is mixed, so every
-line item is gated on relevance — `boat`, `personal`, or undecided. Undecided
-spend is never folded silently into either side; it is reported as its own
-figure, so you always know how far the headline number could move.
+## Below is a short description:
 
-**Money is integer cents everywhere.** No floats touch a dollar figure.
+### What was your motivation?
 
-## Setup
+A refit is a thousand purchases across a dozen vendors and one shared bank account, and
+the only question that matters — *what has this actually cost?* — has no honest answer
+if the numbers are guessed. The motivation was a ledger that would rather report `NULL`
+than a plausible-looking wrong figure, because a missing number announces itself and a
+wrong one hides.
+
+### Why did you build this project?
+
+Because the spreadsheet broke. A shared account mixes groceries with a $4,000 inverter;
+a refit spans Gmail, Amazon, a yard invoice and a marina statement; and every "roughly"
+compounds into a total nobody trusts. So the design captures the raw record — every
+email, API response and transaction — compressed and immutable, and *derives* every
+order and line item from it. When a vendor parser improves, `okey parse --reparse`
+rebuilds history from the raw store; the mailbox is never re-walked.
+
+### What problem does it solve?
+
+It answers *what has this cost, and where could that number be wrong.* It gates every
+line item on relevance — `boat`, `personal`, or undecided — and never folds undecided
+spend silently into either side; it reports it as its own figure, an error bar on the
+headline total. It reconciles orders against what actually left the bank (surfacing cash
+labor, duplicate charges and refunds that never arrived), flags budget overruns and
+closing return windows, and produces an insurance schedule and a resale-reward analysis
+from the same data.
+
+### What did you learn?
+
+Storing raw capture as an immutable, compressed source of truth so that parsing is a
+pure, re-runnable function of it. That schema.org JSON-LD `Order` markup embedded in
+retailer emails beats HTML scraping — exact order numbers, per-item names, quantities
+and prices. Integer cents everywhere, so no float ever touches a dollar. Prompt-caching
+a stable vessel specification so an LLM reads a TP-Link PoE switch as camera
+infrastructure rather than a household gadget. And that the load-bearing discipline is
+the refusal to guess: `NULL` is a feature.
+
+## Table of Contents
+
+- [Getting started](#getting-started)
+- [Usage](#usage)
+- [Project layout](#project-layout)
+- [How it works](#how-it-works)
+- [Tests](#tests)
+- [License](#license)
+- [Contributing](#contributing)
+- [Questions](#questions)
+
+## Getting started
+
+Python 3.11+ with a `src`-layout package and a `hatchling` build. Work inside a virtual
+environment:
 
 ```bash
+git clone https://github.com/P5YC0DR3AM3R/OpheliasKey.git
+cd OpheliasKey
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 cp .env.example .env
 ```
 
-Then `okey init` to create the database and seed the boat-system taxonomy.
+Then create the database and seed the boat-system taxonomy:
+
+```bash
+okey init
+```
 
 ### Try it without credentials
+
+No OAuth clients, no bank link — just exercise the pipeline on a realistic 22-order
+sample that mixes boat and personal purchases, so the relevance gate is actually put to
+work:
 
 ```bash
 okey demo && okey classify && okey report cost && okey report risk
 ```
 
-Loads a realistic 22-order sample mixing boat and personal purchases, so the
-relevance gate is actually exercised. The LLM pass additionally needs
-`ANTHROPIC_API_KEY` (or an `ant auth login` profile). `okey demo --clear` removes it; demo rows use
-the source `demo` and can never be confused with real data.
-
-## Data sources
-
-### Gmail — the broad net
-
-A refit is not one vendor. Gmail catches Defender, West Marine, Fisheries
-Supply, Jamestown, the yard invoice and the surveyor alongside Amazon.
-
-Create a **Desktop app** OAuth client at
-[console.cloud.google.com](https://console.cloud.google.com) with the Gmail API
-enabled and the `gmail.readonly` scope, save the JSON to
-`secrets/gmail_client_secret.json`, then:
-
-```bash
-okey ingest gmail --full
-```
-
-The parser prefers schema.org JSON-LD `Order` markup, which many retailers embed
-for Google's package tracking. It is exact — order number, per-item names,
-quantities, prices — and beats HTML scraping. Emails without it fall back to
-regex for order number and total, producing an order with no itemization, which
-is flagged as a coverage gap rather than passed off as complete.
-
-### Amazon Business — the Reconciliation API
-
-```
-GET {region-host}/reconciliation/2021-01-08/transactions
-    ?feedStartDate=&feedEndDate=&nextPageToken=
-```
-
-Auth is Login with Amazon: a long-lived refresh token is exchanged for a
-one-hour access token. Configure `OKEY_AMAZON_CLIENT_ID`,
-`OKEY_AMAZON_CLIENT_SECRET` and `OKEY_AMAZON_REFRESH_TOKEN`, then
-`okey ingest amazon --full`.
-
-> **Access is gated** and approval is not guaranteed. Use the data export
-> instead — it works today with no approval and feeds the same parser:
->
-> ```bash
-> okey amazon              # prints the steps
-> okey ingest amazon-csv   # after unzipping the export into data/imports/amazon
-> ```
->
-> The export is one row per item. Rows sharing an Order ID are grouped back into
-> orders; `Cancelled` is normalized so cancelled orders stay out of every total;
-> and `Not Available` prices are kept NULL rather than read as `0.00`, then
-> reported by `okey report priceless` — an item with no price is unknown, not
-> free.
-
-> Amazon's own documentation disagrees with itself on the host
-> (`na.business-api.amazon.com` vs `api.business.amazon.com`) and on the rate
-> limit (0.5/s vs 2/s). Both are configurable; the defaults take the
-> conservative reading.
-
-### Plaid — what actually left the account
-
-Orders say what was bought; transactions say what was paid. The gap between them
-is where the findings are: yard labor and cash purchases with no email trail,
-duplicate charges, and refunds promised but never received.
-
-Uses `/transactions/sync` with a persisted cursor. Run `okey plaid link` to
-connect an institution, then `okey ingest plaid`.
+The LLM classification pass additionally needs `ANTHROPIC_API_KEY` in `.env`. Demo rows
+carry the source `demo` and can never be confused with real data; `okey demo --clear`
+removes them.
 
 ## Usage
 
-```bash
-okey init                  # create database, seed taxonomy
-okey ingest gmail --full   # pull order emails
-okey amazon                # how to connect Amazon; shows what is configured
-okey ingest amazon-csv     # import the "Request My Data" order export
-okey ingest amazon --full  # Business API (needs developer approval)
-okey ingest plaid          # pull bank transactions
-okey parse                 # raw documents -> orders + line items
-okey classify              # rules pass: relevance + systems
-okey classify --llm        # LLM pass over what rules could not place
-okey review                # clear the human review queue
-okey reconcile             # match orders to bank charges
-okey report cost           # spend by system, vendor, month
-okey report risk           # findings, most severe first
-okey report spec           # engineering risk from the installed specification
-okey report reward         # what the spending actually returned
-okey report insurance --pdf out.pdf   # equipment + professional install, for an insurer
-okey add invoice 2414.06 --vendor "Poseidon Marine" --system professional_install \
-    --date 2026-07-31 --ref 1199 --note "Service invoice" 
-okey log labor 12 --system electronics_nav --note "GO9 install"
-okey log nights 14 --from 2026-07-01
-okey report unclassified   # items awaiting attribution
-okey status                # ingestion and processing state
-okey serve                 # local dashboard
+Everything is a subcommand of `okey`. A full refresh is `okey parse --reparse`, which
+rebuilds every derived table from the raw store without re-fetching anything.
+
+**Set up**
+
+| Command | What it does |
+| --- | --- |
+| `okey init` | Create the SQLite database and seed the 30-system taxonomy |
+| `okey status` | Show ingestion and processing state |
+
+**Ingest** — pull raw records into the immutable `raw_documents` store
+
+| Command | What it does |
+| --- | --- |
+| `okey ingest gmail --full` | Pull order emails (prefers JSON-LD, falls back to regex) |
+| `okey amazon` | Print how to connect Amazon; show what is configured |
+| `okey ingest amazon-csv` | Import the "Request My Data" order export |
+| `okey ingest amazon --full` | Amazon Business Reconciliation API (needs developer approval) |
+| `okey ingest plaid` | Pull bank transactions via `/transactions/sync` |
+
+**Process** — derive and classify
+
+| Command | What it does |
+| --- | --- |
+| `okey parse` | Raw documents → orders + line items (`--reparse` rebuilds all) |
+| `okey classify` | Rules pass: relevance + system, high precision, no guessing |
+| `okey classify --llm` | LLM pass over what the rules could not place |
+| `okey review` | Clear the human review queue (final verdicts) |
+| `okey reconcile` | Match orders to bank charges |
+
+**Report**
+
+| Command | What it does |
+| --- | --- |
+| `okey report cost` | Spend by system, vendor and month |
+| `okey report risk` | Findings, most severe first |
+| `okey report spec` | Engineering risk from the installed specification |
+| `okey report reward` | What the spend actually returned, in four un-summed lenses |
+| `okey report insurance --pdf out.pdf` | Equipment + professional install, for an insurer |
+| `okey report unclassified` | Line items still awaiting attribution |
+
+**Record by hand** — what no parser can recover
+
+| Command | What it does |
+| --- | --- |
+| `okey add invoice <amount> --vendor … --system … --date …` | A PDF/portal invoice with no parseable body |
+| `okey add commitment "<desc>" --vendor … --system … --scheduled …` | Authorized/scheduled work not yet invoiced |
+| `okey log labor <hours> --system … --note …` | Record install hours — never estimated |
+| `okey log nights <n> --from <date>` | Record nights aboard |
+
+**Serve**
+
+| Command | What it does |
+| --- | --- |
+| `okey serve` | Local dashboard at <http://127.0.0.1:8000>; keyboard-driven review at `/review` |
+
+## Project layout
+
+```
+src/opheliaskey/
+  cli.py            Typer entry point — the `okey` command
+  config.py         Pydantic settings, read from .env
+  sources/          ingestion: gmail, amazon_business, amazon_csv, plaid
+  parsing/          raw documents -> orders + line items (JSON-LD + vendor parsers)
+  classify/         relevance + system: rules, llm, taxonomy (26 boat systems)
+  analysis/         cost, risk, spec, reward, insurance, reconcile, commitments
+  db/               SQLite schema + access (integer cents throughout)
+  web/              FastAPI dashboard + the keyboard-driven review UI
+tests/
+  test_core.py
+docs/
+  ARCHITECTURE.md   design notes and dashboard screenshots
+data/               SQLite database, raw store, imports  (gitignored)
+secrets/            OAuth client secrets and tokens       (gitignored)
+.env.example        copy to .env and fill in
+pyproject.toml      hatchling build, src-layout, console script `okey`
 ```
 
-A full refresh is `okey parse --reparse`, which rebuilds every derived table
-from the raw store.
+## How it works
 
-## Classification
+Four invariants hold the whole thing together; break one and the numbers stop being
+trustworthy.
 
-Two independent questions, answered in three passes.
+### Raw capture is separate from parsing
 
-**Relevance** — is this purchase for the vessel at all? **System** — which of the
-26 boat systems does it belong to?
+Every fetched email, API response and bank transaction is stored compressed and
+immutable in `raw_documents`. Orders and line items are *derived*. When a vendor parser
+improves, `okey parse --reparse` rebuilds everything from the raw store — the mailbox is
+never re-walked, and yesterday's bug does not become today's permanent record.
 
-1. **Rules** (free, instant, auditable) handle what keywords settle with high
-   precision. They answer only what they can answer; everything else is left
-   `NULL`.
-2. **LLM pass** (`okey classify --llm`) handles the rest, with the vessel
-   specification in its system prompt. This is the point of the whole design: a
-   TP-Link PoE switch is an ordinary household purchase in the abstract, but
-   against a boat running six 4K PoE cameras it is obviously part of the camera
-   system. The prompt is stable across batches and marked for prompt caching, so
-   the spec and catalog are billed once.
-3. **Human review** (`okey review`) clears anything still ambiguous or
-   low-confidence. Manual verdicts are final — neither rules nor the LLM will
-   overwrite them.
+### Nothing is guessed
 
-The fastest way to clear it is the browser UI — `okey serve`, then
-**http://127.0.0.1:8000/review**. One item at a time, entirely keyboard-driven:
+A line item the classifier cannot place stays `NULL` and is reported as unclassified
+spend. An order that matches two candidate bank charges is left unreconciled. An Amazon
+export price of `Not Available` stays `NULL` rather than being read as `0.00`. A wrong
+number in a cost report is worse than a missing one, because the missing one is visible.
 
-| Key | Action |
-|---|---|
-| <kbd>B</kbd> | Mark boat, with the selected system |
-| <kbd>P</kbd> | Mark personal |
-| <kbd>S</kbd> | Focus the system picker |
-| <kbd>O</kbd> | Apply the next decision to every unresolved item in the same order |
-| <kbd>J</kbd> / <kbd>K</kbd> | Skip forward / back |
-| <kbd>Z</kbd> | Undo |
+### The project total carries its own error bar
 
-Each item shows quantity, unit and line price, vendor, order date, and the
-LLM's call with its reasoning. The system picker pre-selects whatever the
-classifier suggested, so a correct guess is one keystroke to confirm. Undo
-restores the *exact* prior state — including which pass made the original call
-— so an undone decision does not leave a `manual` marker behind that would
-freeze the item against re-classification.
+The account is mixed, so every line item is gated on relevance — `boat`, `personal`, or
+undecided. Undecided spend is never folded silently into either side; it is reported as
+its own figure, so you always know how far the headline number could still move.
 
-The CLI equivalent, for scripting:
+### Money is integer cents everywhere
 
-```bash
-okey review                                              # see the queue
-okey review --item 5 --mark boat --system solar_generation
-```
+No float ever touches a dollar figure — not in parsing, not in analysis, not in a report.
 
-## Boat systems
+### Classification is three passes
 
-Twenty-six systems, built around this vessel. Power is split six ways —
-`solar_generation`, `energy_storage`, `power_conversion`, `generator`,
-`ac_distribution`, `dc_distribution` — because each is independently budgeted
-and independently capable of overrunning. Sailing systems are absent by design.
-Each system is flagged capital or consumable. See
-`src/opheliaskey/classify/taxonomy.py`.
+1. **Rules** (free, instant, auditable) settle what keywords can settle with high
+   precision, and leave everything else `NULL`.
+2. **The LLM pass** (`okey classify --llm`) takes the rest, with the vessel
+   specification in a prompt marked for prompt caching, so the spec and catalog are
+   billed once across a batch. This is the point of the design: an ordinary household
+   purchase becomes obviously part of a boat system when read against *this* boat.
+3. **Human review** (`okey review`, or the keyboard UI at `/review`) clears anything
+   still ambiguous. Manual verdicts are final — neither the rules nor the LLM overwrite
+   them.
 
-## Risk findings
+### Data sources
 
-| Code | Meaning |
-|---|---|
-| `budget_overrun` | System spend exceeds its budget line |
-| `window_expiring` | A return or warranty window closes within 30 days |
-| `refund_outstanding` | A refund was initiated but never completed |
-| `spend_without_receipt` | A bank charge with no matching order — real spend, no itemization |
-| `orders_unreconciled` | An order with no matching bank charge |
-| `coverage_gap` | Order totals exceed their line items, tax and shipping |
-| `unclassified` | Boat line items with no system attributed |
-| `unreviewed_relevance` | Items not yet confirmed boat or personal — the total's error bar |
-| `vendor_concentration` | Over half of spend with a single supplier |
-
-## Specification risk
-
-Receipts answer what something cost. They cannot answer whether it will work.
-`okey report spec` compares the vessel's installed specification against what
-the hardware can actually deliver:
-
-| Check | Question it answers |
-|---|---|
-| `bms_headroom` | Can the bank deliver what the inverter will ask of it? |
-| `ac_startup_surge` | Will the air conditioner actually start on inverter power? |
-| `solar_nameplate_gap` | What will the array really produce, versus its rating? |
-| `solar_cannot_sustain_ac` | Can solar carry the primary load, or is the generator load-bearing? |
-| `battery_runtime` | How long does the primary load run on the bank alone? |
-| `mppt_ceiling` | Does the controller cap the array — and does that cap actually bind? |
-| `string_voltage_unverified` | Does the string stay inside the MPPT's input window when hot? |
-| `house_bank_charging_unspecified` | Does the isolated 12V bank have a way to charge? |
-| `generator_leg_capacity` | How much of the generator's rating is usable at 120V? |
-
-**These are estimates from stated specifications, not measurements.** Every
-judgement call lives in one `ASSUMPTIONS` table, is cited by each finding that
-depends on it, and is visible with `okey report spec --assumptions`. Any spec
-value can be corrected without touching code by writing `spec.<key>` into
-`project_meta` — an override that makes a finding disappear is the finding
-working correctly, not being silenced.
-
-A check that finds nothing wrong returns nothing. None of them fabricate
-reassurance.
-
-## Reward
-
-The honest starting point: **refit spend does not return dollar-for-dollar at
-resale, and most of it never will.** A reward module that implied otherwise
-would be flattering and useless.
-
-`okey report reward` measures what can be defended, in four separate lenses
-that are deliberately **never summed** — they measure different things, and
-adding them would double-count:
-
-| Lens | What it answers | Source |
-|---|---|---|
-| Recoverable vs sunk | What a buyer plausibly pays for, and what is gone | Declared per-system recovery rates |
-| Labor avoided | Work performed instead of purchased | **Recorded** hours — never estimated |
-| Capability delivered | Days of autonomy, AC runtime, $/kWh, $/W at real output | The same spec the risk checks read |
-| Use value | Cost per night aboard, and break-even against the alternative | **Recorded** nights aboard |
-
-Two deliberate constraints:
-
-**Labor and nights are recorded, not estimated.** Guessing install hours would
-manufacture return out of nothing, so both come from `okey log`. With nothing
-logged, the report says so rather than inventing a figure.
-
-**Use value amortizes the sunk portion only.** The recoverable portion is not
-consumed by using the boat, so charging it against nights aboard would
-double-count it.
-
-Recovery rates are heuristics with wide error bars — electronics date fastest
-(20–25%), documented engine work holds best (50%), and anything consumed is 0%.
-They live in one declared table with a stated basis per system, visible via
-`okey report reward --assumptions`, for the same reason the specification
-assumptions do: a number you cannot see is a number you cannot argue with.
-
-## Insurance schedule
-
-`okey report insurance --pdf schedule.pdf` produces a document for an
-underwriter: equipment fitted to the vessel, plus the professional labor that
-fitted it.
-
-It is deliberately narrower than the cost report. Slip fees, registration,
-title, insurance premiums, transport, storage, consumables and tools are
-excluded — each by a named rule the PDF prints, with its amount, so the
-schedule states its own boundaries rather than quietly narrowing the picture.
-Any single item can be forced in or out with `--insurable` / `--not-insurable`,
-and a hand-excluded item still appears in the excluded list.
-
-**Vessel attribution matters here.** Invoices exist in the same mailbox for a
-previous boat. Orders carry a `vessel` field and the schedule filters on it, so
-a prior vessel's work can never land on this one's schedule.
-
-## Recording invoices by hand
-
-Most real marine invoices arrive as a PDF attachment or a portal link with no
-amount in the email body — Shopmonkey shops (AVC Marine, Poseidon Marine) and
-marina statements both work this way. No parser can recover those, so:
-
-```bash
-okey add invoice 1526.17 --vendor "Port Royale Marina" --system moorage \
-    --date 2026-08-22 --ref PR-2026-08 --note "September slip"
-okey systems          # list the system keys
-okey report unpriced  # invoices the parser found but could not price
-```
-
-## Committed work
-
-Every other figure in this project is backward-looking. `okey add commitment`
-records work that is authorized or scheduled but not yet invoiced, which is the
-difference between *what has this cost* and *what will it cost*.
-
-```bash
-okey add commitment "Exhaust hose replacement" --vendor "Poseidon Marine" \
-    --system propulsion --scheduled 2026-08-25 --ref 1228
-okey report commitments
-okey add invoiced 1228        # close it once the invoice is recorded
-```
-
-Commitments live in their own table, so they can never leak into spend. Omit
-`--estimate` when the cost is genuinely unknown: it stays NULL rather than
-becoming zero, and every report states how many commitments are unpriced, so
-the estimate is never mistaken for the total.
+- **Gmail** is the broad net — a refit is not one vendor. The parser prefers schema.org
+  JSON-LD `Order` markup and falls back to regex, flagging emails with no itemization as
+  a coverage gap rather than passing them off as complete.
+- **Amazon** works either through the gated Business Reconciliation API or, with no
+  approval needed today, the "Request My Data" CSV export, which feeds the same parser.
+- **Plaid** (`/transactions/sync`, with a persisted cursor) says what actually left the
+  account. The gap between what was ordered and what was paid is where the findings live.
 
 ## Tests
 
 ```bash
 .venv/bin/python -m pytest tests/ -q
+.venv/bin/ruff check src tests
 ```
 
-## Privacy
+The database, `.env` and `secrets/` are gitignored; the dashboard binds to `127.0.0.1`
+and the review endpoints reject cross-origin and cross-site requests, so a page open in
+your browser cannot POST to the local ledger.
 
-`data/`, `.env` and `secrets/` are gitignored. The database holds personal
-purchase history and never leaves the machine; the dashboard binds to
-`127.0.0.1` by default.
+## License
 
-The review endpoints mutate the ledger, and any page open in your browser can
-POST to localhost — so they reject cross-origin and cross-site requests rather
-than relying on the bind address alone.
+<img src="https://img.shields.io/badge/License-Proprietary-C41E3A?style=for-the-badge" alt="Proprietary" />
+
+© 2025–2026 Phygital DevOps Inc. All rights reserved.
+
+This repository is proprietary. It is a private tool built for the **Ophelia's Key**
+vessel project, and the code, the boat-system taxonomy, the specification models and the
+purchase data it operates on may not be reused, redistributed or incorporated into other
+work without written permission. It holds personal purchase history and financial detail
+and is not intended for public distribution. Third-party dependencies (Typer, Rich,
+FastAPI, Pydantic, the Anthropic and Google API clients, Plaid access, and the rest)
+remain under their own respective licenses.
+
+## Contributing
+
+Interested in contributing? Email and put **"Request to push to GitHub Repo"** in the
+subject line and we can discuss.
+
+Conventions that matter here:
+
+- **The raw store is immutable.** Fetchers only ever append to `raw_documents`; every
+  order and line item is derived and rebuildable with `okey parse --reparse`.
+- **Never guess.** Unclassifiable stays `NULL`, an ambiguous match stays unreconciled,
+  and an unknown price stays `NULL` — surfaced in a report, not filled in.
+- **Money is integer cents.** No floats in a dollar path.
+- **Recorded, not estimated.** Labor hours and nights aboard come from `okey log`;
+  nothing manufactures return out of a guess.
+- Commits use imperative mood; branch with PRs; keep `ruff` clean.
+
+## Questions
+
+For any questions, please reach out:
+
+- General &mdash; <micahreadmgmt@gmail.com>
+- Phygital DevOps business &mdash; <micah@lyricshow.live>
+
+---
+
+### Created by
+
+Micah Read
+
+<pre align="center"><font size="1">
+ .d88888b. 8888888b. 888    8888888888888888     8888888       d8888d8b 
+d88P" "Y88b888   Y88b888    888888       888       888        d8888888P 
+888     888888    888888    888888       888       888       d88P8888P  
+888     888888   d88P88888888888888888   888       888      d88P 888"   
+888     8888888888P" 888    888888       888       888     d88P  888    
+888     888888       888    888888       888       888    d88P   888    
+Y88b. .d88P888       888    888888       888       888   d8888888888    
+ "Y88888P" 888       888    8888888888888888888888888888d88P     888    
+                                                                        
+                                                                        
+                                                                        
+ .d8888b.    888    d8P 8888888888Y88b   d88P 
+d88P  Y88b   888   d8P  888        Y88b d88P  
+Y88b.        888  d8P   888         Y88o88P   
+ "Y888b.     888d88K    8888888      Y888P    
+    "Y88b.   8888888b   888           888     
+      "888   888  Y88b  888           888     
+Y88b  d88P   888   Y88b 888           888     
+ "Y8888P"    888    Y88b8888888888    888     
+                                              
+                                              
+                                              
+</font></pre>
+
+<!-- Animated Wave Footer -->
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0B1E2A,50:17C3DE,100:0B1E2A&height=120&section=footer" width="100%" alt="Footer" />
+</p>
