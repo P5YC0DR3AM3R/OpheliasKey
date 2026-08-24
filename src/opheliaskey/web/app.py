@@ -11,11 +11,12 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from ..config import PROJECT_ROOT
 from ..db.database import utcnow
 
 from ..analysis.cost import cost_report
@@ -32,6 +33,14 @@ STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 MODEL_JS = STATIC_DIR / "studio-model.js"
 
+# The documentation site — the landing page and the generated manual — lives at
+# the repo root so the same files can also be hosted statically. Served here,
+# docs and numbers are one site on one port.
+SITE_INDEX = PROJECT_ROOT / "index.html"
+MANUAL_DIR = PROJECT_ROOT / "manual"
+if MANUAL_DIR.is_dir():
+    app.mount("/manual", StaticFiles(directory=str(MANUAL_DIR), html=True), name="manual")
+
 # Two faces of the same report: the growth story (default) and the full working.
 STUDIO_PAGES = {"growth": "growth.html", "full": "studio.html"}
 
@@ -44,6 +53,14 @@ def _db():
 
 
 @app.get("/", response_class=HTMLResponse)
+def home():
+    # An installed copy without the site files still lands on the numbers.
+    if SITE_INDEX.exists():
+        return FileResponse(SITE_INDEX)
+    return RedirectResponse("/ledger")
+
+
+@app.get("/ledger", response_class=HTMLResponse)
 def dashboard(request: Request):
     db = _db()
     cost = cost_report(db)

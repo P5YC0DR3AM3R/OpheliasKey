@@ -201,6 +201,7 @@ SHELL = """<!doctype html>
     <nav class="topnav">
       <a class="chip" href="../">Home</a>
 __TOPNAV__
+      <a class="chip" href="../ledger">Ledger</a>
       <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">GitHub</a>
     </nav>
   </div>
@@ -213,6 +214,11 @@ __TOPNAV__
       <summary>Menu</summary>
       <h4>Pages</h4>
 __PAGES__
+      <h4>The numbers</h4>
+      <a class="page" href="../ledger">Ledger</a>
+      <a class="page" href="../review">Review</a>
+      <a class="page" href="../studio">Growth</a>
+      <a class="page" href="../studio/full">Studio · full</a>
       <h4>On this page</h4>
 __SECTIONS__
     </details>

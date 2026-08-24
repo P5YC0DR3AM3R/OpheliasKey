@@ -184,7 +184,7 @@ rebuilds every derived table from the raw store without re-fetching anything.
 
 | Command | What it does |
 | --- | --- |
-| `okey serve` | Local dashboard at <http://127.0.0.1:8000>; keyboard-driven review at `/review` |
+| `okey serve` | The whole site at <http://127.0.0.1:8000> — landing page, manual, and the live numbers (`/ledger`, `/review`, `/studio`) |
 
 ## Project layout
 
