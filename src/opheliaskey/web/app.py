@@ -91,6 +91,13 @@ def dashboard(request: Request):
     )
 
 
+@app.get("/api/ping")
+def api_ping():
+    """Liveness probe for the site pages: statically hosted copies use this to
+    tell whether the numbers routes exist, and disable those links if not."""
+    return JSONResponse({"ok": True})
+
+
 @app.get("/api/cost")
 def api_cost():
     return JSONResponse(cost_report(_db()))

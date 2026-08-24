@@ -192,6 +192,13 @@
   .foot .fine { flex-basis: 100%; border-top: 1px solid var(--line); padding-top: 16px;
                 font-size: 12px; color: var(--mute); max-width: 100ch; }
 
+  /* ---------- live/static probe ---------- */
+  /* Served by okey, the numbers routes exist and the hint is noise; hosted
+     statically they would 404, so the links stand down instead. */
+  body.live .server-hint { display: none; }
+  body.static-mode .needs-server { opacity: .4; pointer-events: none; }
+  body.static-mode .server-hint { color: var(--warm); }
+
   /* ---------- load choreography ---------- */
   @media (prefers-reduced-motion: no-preference) {
     .rise { opacity: 0; transform: translateY(10px); animation: rise .6s ease forwards; }
@@ -221,7 +228,7 @@
       <span class="chip"><i></i>VESSEL MT9740CA</span>
       <a class="chip holo" href="manual/"><i></i>MANUAL</a>
       <a class="chip" href="manual/architecture.html"><i></i>ARCHITECTURE</a>
-      <a class="chip holo" href="ledger"><i></i>LEDGER</a>
+      <a class="chip holo needs-server" href="ledger"><i></i>LEDGER</a>
       <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey"><i></i>GITHUB</a>
     </div>
   </header>
@@ -258,10 +265,10 @@ Y88b. .d88P  888         888    888  888         888         888     d8888888888
       <code>NULL</code> than a plausible-looking wrong number.</p>
     <div class="cta rise d4">
       <a class="btn" href="manual/">Read the manual</a>
-      <a class="btn" href="ledger">See the numbers</a>
+      <a class="btn needs-server" href="ledger">See the numbers</a>
       <a class="btn ghost" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">View the repository</a>
     </div>
-    <p class="rise d5" style="font: 500 11.5px/1.5 var(--mono); color: var(--mute); margin: 4px 0 0">
+    <p class="rise d5 server-hint" style="font: 500 11.5px/1.5 var(--mono); color: var(--mute); margin: 4px 0 0">
       The numbers read the local ledger — start the server with <code>okey serve</code>.</p>
   </section>
 
@@ -427,8 +434,8 @@ Y88b. .d88P  888         888    888  888         888         888     d8888888888
     <div class="col">
       <b>Elsewhere</b>
       <a href="manual/">The manual</a> · <a href="manual/architecture.html">Architecture</a><br>
-      <a href="ledger">Ledger</a> · <a href="review">Review</a> ·
-      <a href="studio">Growth</a> · <a href="studio/full">Studio</a><br>
+      <span class="needs-server"><a href="ledger">Ledger</a> · <a href="review">Review</a> ·
+      <a href="studio">Growth</a> · <a href="studio/full">Studio</a></span><br>
       <a href="https://github.com/P5YC0DR3AM3R/OpheliasKey">github.com/P5YC0DR3AM3R/OpheliasKey</a><br>
       <a href="https://lyricshow.live">lyricshow.live</a>
     </div>
@@ -438,6 +445,12 @@ Y88b. .d88P  888         888    888  888         888         888     d8888888888
     </div>
   </div>
 </footer>
+
+<script>
+  fetch('api/ping').then(function (r) {
+    document.body.classList.add(r.ok ? 'live' : 'static-mode');
+  }).catch(function () { document.body.classList.add('static-mode'); });
+</script>
 
 </body>
 </html>
