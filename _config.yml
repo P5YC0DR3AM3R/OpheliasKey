@@ -9,5 +9,6 @@ exclude:
   - src/
   - tests/
   - secrets/
+  - tools/
   - pyproject.toml
   - .env.example
