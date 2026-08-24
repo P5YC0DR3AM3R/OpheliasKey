@@ -1,0 +1,980 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Manual — Ophelia's Key</title>
+<meta name="description" content="Documentation for Ophelia's Key (okey), purchase intelligence for a liveaboard refit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050a12'/%3E%3Cpath d='M4 21h20l4-6H6z' fill='none' stroke='%234fe3ff' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='10' r='2.4' fill='%23ffb347'/%3E%3Cpath d='M2 25h28' stroke='%234fe3ff' stroke-opacity='.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #050a12; --surface: #0b1420; --surface-2: #0f1b2b;
+    --line: #17263a; --line-2: #1f3249;
+    --ink: #dbe8f5; --ink-2: #a9bbcf; --dim: #7f95ad; --mute: #4d6178;
+    --holo: #4fe3ff; --holo-soft: rgba(79,227,255,.14); --holo-line: rgba(79,227,255,.55);
+    --warm: #ffb347;
+    --display: "Chakra Petch", "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 15px/1.62 var(--sans); -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(1100px 500px at 50% -10%, rgba(79,227,255,.06), transparent 60%),
+      linear-gradient(rgba(79,227,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,227,255,.03) 1px, transparent 1px);
+    background-size: auto, 48px 48px, 48px 48px;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px);
+    mix-blend-mode: screen;
+  }
+  a { color: var(--holo); text-decoration: none; } a:hover { text-decoration: underline; }
+
+  /* ---------- top bar ---------- */
+  .mast { position: sticky; top: 0; z-index: 40; background: rgba(5,10,18,.92);
+          backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+  .mast-in { max-width: 1180px; margin: 0 auto; padding: 13px 22px;
+             display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap; }
+  .eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+             color: var(--dim); display: flex; gap: 14px; flex-wrap: wrap; }
+  .eyebrow b { color: var(--holo); font-weight: 500; }
+  .eyebrow a { color: inherit; } .eyebrow a:hover { color: var(--holo); text-decoration: none; }
+  .topnav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono);
+          letter-spacing: .08em; text-transform: uppercase; padding: 6px 9px;
+          border: 1px solid var(--line-2); color: var(--ink-2); background: var(--surface); }
+  a.chip:hover { text-decoration: none; border-color: var(--holo-line); color: var(--holo); }
+  .chip.here { border-color: var(--holo-line); color: var(--holo); }
+
+  /* ---------- frame ---------- */
+  .frame { max-width: 1180px; margin: 0 auto; padding: 28px 22px 80px;
+           display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 34px; align-items: start; }
+  @media (max-width: 900px) { .frame { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- sidebar ---------- */
+  .side { position: sticky; top: 66px; max-height: calc(100vh - 82px); overflow-y: auto;
+          padding-right: 6px; scrollbar-width: thin; }
+  .side h4 { margin: 18px 0 8px; font: 600 10px/1 var(--mono); letter-spacing: .18em;
+             text-transform: uppercase; color: var(--mute); }
+  .side h4:first-child { margin-top: 2px; }
+  .side h4::before { content: "// "; }
+  .side a { display: block; padding: 5px 10px; margin: 1px 0; font: 500 12px/1.4 var(--mono);
+            letter-spacing: .04em; color: var(--dim); border-left: 1px solid var(--line-2); }
+  .side a:hover { color: var(--holo); text-decoration: none; border-left-color: var(--holo-line); }
+  .side a.page { color: var(--ink-2); text-transform: uppercase; letter-spacing: .1em; font-size: 11px; }
+  .side a.page.here { color: var(--holo); border-left-color: var(--holo); background: var(--holo-soft); }
+  .side a.on { color: var(--holo); border-left-color: var(--holo); }
+  @media (max-width: 900px) {
+    .side { position: static; max-height: none; border: 1px solid var(--line);
+            background: var(--surface); padding: 6px 14px 14px; }
+    details.menu summary { cursor: pointer; list-style: none; font: 600 11px/1 var(--mono);
+      letter-spacing: .16em; text-transform: uppercase; color: var(--holo); padding: 10px 0; }
+    details.menu summary::before { content: "▤ "; }
+  }
+  @media (min-width: 901px) { details.menu { display: contents; } details.menu summary { display: none; } }
+
+  /* ---------- document ---------- */
+  .doc { min-width: 0; }
+  .doc-head { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 26px; }
+  .doc-head h1 { margin: 0 0 8px; font: 700 clamp(26px, 4vw, 38px)/1.05 var(--display);
+                 letter-spacing: .01em; text-transform: uppercase; }
+  .doc-head h1 span { color: var(--holo); text-shadow: 0 0 18px rgba(79,227,255,.4); }
+  .doc-head p { margin: 0; color: var(--ink-2); max-width: 72ch; }
+  .doc-head p code { font-size: 13px; }
+
+  .doc h2 { margin: 44px 0 14px; font: 700 20px/1.2 var(--display); letter-spacing: .03em;
+            text-transform: uppercase; color: var(--ink); padding-bottom: 8px;
+            border-bottom: 1px solid var(--line); }
+  .doc h2::before { content: "// "; color: var(--holo); }
+  .doc h3 { margin: 26px 0 8px; font: 600 15px/1.3 var(--display); letter-spacing: .04em;
+            text-transform: uppercase; color: var(--ink); }
+  .doc h2[id], .doc h3[id] { scroll-margin-top: 74px; }
+  .doc p, .doc li { color: var(--ink-2); }
+  .doc p { margin: 0 0 12px; max-width: 78ch; }
+  .doc strong { color: var(--ink); }
+  .doc em { color: var(--ink); font-style: italic; }
+  .doc ul, .doc ol { margin: 0 0 14px; padding-left: 22px; }
+  .doc li { margin-bottom: 5px; }
+  .doc hr { border: 0; border-top: 1px solid var(--line); margin: 34px 0; }
+  .doc code { font: 12.5px var(--mono); background: var(--surface-2); border: 1px solid var(--line);
+              padding: 1px 6px; border-radius: 3px; color: var(--ink-2); }
+  .doc pre { background: #030710; border: 1px solid var(--line); padding: 13px 16px; margin: 0 0 14px;
+             font: 12.5px/1.6 var(--mono); color: var(--ink-2); overflow-x: auto; }
+  .doc pre code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; }
+  .doc pre[align="center"] { text-align: left; background: transparent; border: 0;
+      color: var(--holo); text-shadow: 0 0 8px rgba(79,227,255,.45);
+      font-size: clamp(4.5px, calc((100vw - 120px) / 102), 10px); line-height: 1.18; }
+  .doc blockquote { margin: 0 0 14px; padding: 12px 16px; border-left: 2px solid var(--holo-line);
+                    background: var(--surface); }
+  .doc blockquote p { margin-bottom: 8px; } .doc blockquote p:last-child { margin-bottom: 0; }
+  .doc table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 0 0 18px;
+               display: block; overflow-x: auto; }
+  .doc th { font: 600 10.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+            color: var(--dim); text-align: left; padding: 0 14px 8px 0;
+            border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+  .doc td { padding: 8px 14px 8px 0; border-bottom: 1px solid var(--line); color: var(--ink-2);
+            vertical-align: top; }
+  .doc tr:last-child td { border-bottom: 0; }
+  .doc img { max-width: 100%; }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--line); }
+  .foot { max-width: 1180px; margin: 0 auto; padding: 20px 22px 34px;
+          display: flex; justify-content: space-between; gap: 12px 30px; flex-wrap: wrap;
+          font: 400 12.5px/1.6 var(--sans); color: var(--mute); }
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="mast-in">
+    <div class="eyebrow">
+      <span><a href="../"><b>OPHELIA'S KEY</b></a></span>
+      <span>SHIP'S&nbsp;MANUAL</span>
+    </div>
+    <nav class="topnav">
+      <a class="chip" href="../">Home</a>
+      <a class="chip here" href="index.html">The manual</a>
+      <a class="chip" href="architecture.html">Architecture</a>
+      <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="frame">
+
+  <nav class="side" aria-label="Manual navigation">
+    <details class="menu" open>
+      <summary>Menu</summary>
+      <h4>Pages</h4>
+      <a class="page here" href="index.html">The manual</a>
+      <a class="page" href="architecture.html">Architecture</a>
+      <h4>On this page</h4>
+      <a href="#below-is-a-short-description">Below is a short description:</a>
+      <a href="#getting-started">Getting started</a>
+      <a href="#usage">Usage</a>
+      <a href="#project-layout">Project layout</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#data-sources_1">Data sources</a>
+      <a href="#classification">Classification</a>
+      <a href="#boat-systems">Boat systems</a>
+      <a href="#risk-findings">Risk findings</a>
+      <a href="#specification-risk">Specification risk</a>
+      <a href="#reward">Reward</a>
+      <a href="#floating-studio">Floating studio</a>
+      <a href="#insurance-schedule">Insurance schedule</a>
+      <a href="#recording-invoices-by-hand">Recording invoices by hand</a>
+      <a href="#committed-work">Committed work</a>
+      <a href="#tests">Tests</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#license">License</a>
+      <a href="#contributing">Contributing</a>
+      <a href="#questions">Questions</a>
+    </details>
+  </nav>
+
+  <main class="doc">
+    <div class="doc-head">
+      <h1><span>The Manual</span></h1>
+      <p>Everything <code>okey</code> ingests, derives and reports — and why it would rather say <code>NULL</code> than guess.</p>
+    </div>
+<p><strong>Ophelia's Key</strong> (<code>okey</code>) is a command-line tool that turns the paper trail of a boat
+refit into a queryable ledger. It ingests every purchase from Gmail, Amazon Business
+and the bank (via Plaid), separates project spend from personal spend in a shared
+account, attributes each line item to a boat system, and reports cost, budget variance
+and risk.</p>
+<p>It is built for one specific vessel — a liveaboard pleasure craft on Montana permanent
+registration (<strong>MT9740CA</strong>) with a substantial off-grid electrical system: a 4 kW solar
+array, 15.36 kWh of LiFePO4, a 4 kW hybrid inverter and an 8 kW backup generator,
+running Simrad GO9, radar, Starlink, NMEA 2000 and six 4K cameras. The system taxonomy
+is that boat, not a generic one.</p>
+<h2 id="below-is-a-short-description">Below is a short description:</h2>
+<h3 id="what-was-your-motivation">What was your motivation?</h3>
+<p>A refit is a thousand purchases across a dozen vendors and one shared bank account, and
+the only question that matters — <em>what has this actually cost?</em> — has no honest answer
+if the numbers are guessed. The motivation was a ledger that would rather report <code>NULL</code>
+than a plausible-looking wrong figure, because a missing number announces itself and a
+wrong one hides.</p>
+<h3 id="why-did-you-build-this-project">Why did you build this project?</h3>
+<p>Because the spreadsheet broke. A shared account mixes groceries with a $4,000 inverter;
+a refit spans Gmail, Amazon, a yard invoice and a marina statement; and every "roughly"
+compounds into a total nobody trusts. So the design captures the raw record — every
+email, API response and transaction — compressed and immutable, and <em>derives</em> every
+order and line item from it. When a vendor parser improves, <code>okey parse --reparse</code>
+rebuilds history from the raw store; the mailbox is never re-walked.</p>
+<h3 id="what-problem-does-it-solve">What problem does it solve?</h3>
+<p>It answers <em>what has this cost, and where could that number be wrong.</em> It gates every
+line item on relevance — <code>boat</code>, <code>personal</code>, or undecided — and never folds undecided
+spend silently into either side; it reports it as its own figure, an error bar on the
+headline total. It reconciles orders against what actually left the bank (surfacing cash
+labor, duplicate charges and refunds that never arrived), flags budget overruns and
+closing return windows, and produces an insurance schedule and a resale-reward analysis
+from the same data.</p>
+<h3 id="what-did-you-learn">What did you learn?</h3>
+<p>Storing raw capture as an immutable, compressed source of truth so that parsing is a
+pure, re-runnable function of it. That schema.org JSON-LD <code>Order</code> markup embedded in
+retailer emails beats HTML scraping — exact order numbers, per-item names, quantities
+and prices. Integer cents everywhere, so no float ever touches a dollar. Prompt-caching
+a stable vessel specification so an LLM reads a TP-Link PoE switch as camera
+infrastructure rather than a household gadget. And that the load-bearing discipline is
+the refusal to guess: <code>NULL</code> is a feature.</p>
+<h2 id="getting-started">Getting started</h2>
+<p>Python 3.11+ with a <code>src</code>-layout package and a <code>hatchling</code> build. Work inside a virtual
+environment:</p>
+<pre><code class="language-bash">git clone https://github.com/P5YC0DR3AM3R/OpheliasKey.git
+cd OpheliasKey
+python3 -m venv .venv &amp;&amp; .venv/bin/pip install -e &quot;.[dev]&quot;
+cp .env.example .env
+</code></pre>
+<p>Then create the database and seed the boat-system taxonomy:</p>
+<pre><code class="language-bash">okey init
+</code></pre>
+<h3 id="try-it-without-credentials">Try it without credentials</h3>
+<p>No OAuth clients, no bank link — just exercise the pipeline on a realistic 22-order
+sample that mixes boat and personal purchases, so the relevance gate is actually put to
+work:</p>
+<pre><code class="language-bash">okey demo &amp;&amp; okey classify &amp;&amp; okey report cost &amp;&amp; okey report risk
+</code></pre>
+<p>The LLM classification pass additionally needs <code>ANTHROPIC_API_KEY</code> in <code>.env</code>. Demo rows
+carry the source <code>demo</code> and can never be confused with real data; <code>okey demo --clear</code>
+removes them.</p>
+<h2 id="usage">Usage</h2>
+<p>Everything is a subcommand of <code>okey</code>. A full refresh is <code>okey parse --reparse</code>, which
+rebuilds every derived table from the raw store without re-fetching anything.</p>
+<p><strong>Set up</strong></p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>okey init</code></td>
+<td>Create the SQLite database and seed the 30-system taxonomy</td>
+</tr>
+<tr>
+<td><code>okey status</code></td>
+<td>Show ingestion and processing state</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Ingest</strong> — pull raw records into the immutable <code>raw_documents</code> store</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>okey ingest gmail --full</code></td>
+<td>Pull order emails (prefers JSON-LD, falls back to regex)</td>
+</tr>
+<tr>
+<td><code>okey amazon</code></td>
+<td>Print how to connect Amazon; show what is configured</td>
+</tr>
+<tr>
+<td><code>okey ingest amazon-csv</code></td>
+<td>Import the "Request My Data" order export</td>
+</tr>
+<tr>
+<td><code>okey ingest amazon --full</code></td>
+<td>Amazon Business Reconciliation API (needs developer approval)</td>
+</tr>
+<tr>
+<td><code>okey ingest plaid</code></td>
+<td>Pull bank transactions via <code>/transactions/sync</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Process</strong> — derive and classify</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>okey parse</code></td>
+<td>Raw documents → orders + line items (<code>--reparse</code> rebuilds all)</td>
+</tr>
+<tr>
+<td><code>okey classify</code></td>
+<td>Rules pass: relevance + system, high precision, no guessing</td>
+</tr>
+<tr>
+<td><code>okey classify --llm</code></td>
+<td>LLM pass over what the rules could not place</td>
+</tr>
+<tr>
+<td><code>okey review</code></td>
+<td>Clear the human review queue (final verdicts)</td>
+</tr>
+<tr>
+<td><code>okey reconcile</code></td>
+<td>Match orders to bank charges</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Report</strong></p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>okey report cost</code></td>
+<td>Spend by system, vendor and month</td>
+</tr>
+<tr>
+<td><code>okey report risk</code></td>
+<td>Findings, most severe first</td>
+</tr>
+<tr>
+<td><code>okey report spec</code></td>
+<td>Engineering risk from the installed specification</td>
+</tr>
+<tr>
+<td><code>okey report reward</code></td>
+<td>What the spend actually returned, in four un-summed lenses</td>
+</tr>
+<tr>
+<td><code>okey report insurance --pdf out.pdf</code></td>
+<td>Equipment + professional install, for an insurer</td>
+</tr>
+<tr>
+<td><code>okey report unclassified</code></td>
+<td>Line items still awaiting attribution</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Record by hand</strong> — what no parser can recover</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>okey add invoice &lt;amount&gt; --vendor … --system … --date …</code></td>
+<td>A PDF/portal invoice with no parseable body</td>
+</tr>
+<tr>
+<td><code>okey add commitment "&lt;desc&gt;" --vendor … --system … --scheduled …</code></td>
+<td>Authorized/scheduled work not yet invoiced</td>
+</tr>
+<tr>
+<td><code>okey log labor &lt;hours&gt; --system … --note …</code></td>
+<td>Record install hours — never estimated</td>
+</tr>
+<tr>
+<td><code>okey log nights &lt;n&gt; --from &lt;date&gt;</code></td>
+<td>Record nights aboard</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Serve</strong></p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>okey serve</code></td>
+<td>Local dashboard at <a href="http://127.0.0.1:8000">http://127.0.0.1:8000</a>; keyboard-driven review at <code>/review</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="project-layout">Project layout</h2>
+<pre><code>src/opheliaskey/
+  cli.py            Typer entry point — the `okey` command
+  config.py         Pydantic settings, read from .env
+  sources/          ingestion: gmail, amazon_business, amazon_csv, plaid
+  parsing/          raw documents -&gt; orders + line items (JSON-LD + vendor parsers)
+  classify/         relevance + system: rules, llm, taxonomy (30 boat systems)
+  analysis/         cost, risk, spec, reward, insurance, reconcile, commitments
+  db/               SQLite schema + access (integer cents throughout)
+  web/              FastAPI dashboard + the keyboard-driven review UI
+tests/
+  test_core.py
+docs/
+  ARCHITECTURE.md   design notes and dashboard screenshots
+data/               SQLite database, raw store, imports  (gitignored)
+secrets/            OAuth client secrets and tokens       (gitignored)
+.env.example        copy to .env and fill in
+pyproject.toml      hatchling build, src-layout, console script `okey`
+</code></pre>
+<h2 id="how-it-works">How it works</h2>
+<p>Four invariants hold the whole thing together; break one and the numbers stop being
+trustworthy.</p>
+<h3 id="raw-capture-is-separate-from-parsing">Raw capture is separate from parsing</h3>
+<p>Every fetched email, API response and bank transaction is stored compressed and
+immutable in <code>raw_documents</code>. Orders and line items are <em>derived</em>. When a vendor parser
+improves, <code>okey parse --reparse</code> rebuilds everything from the raw store — the mailbox is
+never re-walked, and yesterday's bug does not become today's permanent record.</p>
+<h3 id="nothing-is-guessed">Nothing is guessed</h3>
+<p>A line item the classifier cannot place stays <code>NULL</code> and is reported as unclassified
+spend. An order that matches two candidate bank charges is left unreconciled. An Amazon
+export price of <code>Not Available</code> stays <code>NULL</code> rather than being read as <code>0.00</code>. A wrong
+number in a cost report is worse than a missing one, because the missing one is visible.</p>
+<h3 id="the-project-total-carries-its-own-error-bar">The project total carries its own error bar</h3>
+<p>The account is mixed, so every line item is gated on relevance — <code>boat</code>, <code>personal</code>, or
+undecided. Undecided spend is never folded silently into either side; it is reported as
+its own figure, so you always know how far the headline number could still move.</p>
+<h3 id="money-is-integer-cents-everywhere">Money is integer cents everywhere</h3>
+<p>No float ever touches a dollar figure — not in parsing, not in analysis, not in a report.</p>
+<h3 id="classification-is-three-passes">Classification is three passes</h3>
+<ol>
+<li><strong>Rules</strong> (free, instant, auditable) settle what keywords can settle with high
+   precision, and leave everything else <code>NULL</code>.</li>
+<li><strong>The LLM pass</strong> (<code>okey classify --llm</code>) takes the rest, with the vessel
+   specification in a prompt marked for prompt caching, so the spec and catalog are
+   billed once across a batch. This is the point of the design: an ordinary household
+   purchase becomes obviously part of a boat system when read against <em>this</em> boat.</li>
+<li><strong>Human review</strong> (<code>okey review</code>, or the keyboard UI at <code>/review</code>) clears anything
+   still ambiguous. Manual verdicts are final — neither the rules nor the LLM overwrite
+   them.</li>
+</ol>
+<h3 id="data-sources">Data sources</h3>
+<ul>
+<li><strong>Gmail</strong> is the broad net — a refit is not one vendor. The parser prefers schema.org
+  JSON-LD <code>Order</code> markup and falls back to regex, flagging emails with no itemization as
+  a coverage gap rather than passing them off as complete.</li>
+<li><strong>Amazon</strong> works either through the gated Business Reconciliation API or, with no
+  approval needed today, the "Request My Data" CSV export, which feeds the same parser.</li>
+<li><strong>Plaid</strong> (<code>/transactions/sync</code>, with a persisted cursor) says what actually left the
+  account. The gap between what was ordered and what was paid is where the findings live.</li>
+</ul>
+<h2 id="data-sources_1">Data sources</h2>
+<h3 id="gmail-the-broad-net">Gmail — the broad net</h3>
+<p>A refit is not one vendor. Gmail catches Defender, West Marine, Fisheries
+Supply, Jamestown, the yard invoice and the surveyor alongside Amazon.</p>
+<p>Create a <strong>Desktop app</strong> OAuth client at
+<a href="https://console.cloud.google.com">console.cloud.google.com</a> with the Gmail API
+enabled and the <code>gmail.readonly</code> scope, save the JSON to
+<code>secrets/gmail_client_secret.json</code>, then:</p>
+<pre><code class="language-bash">okey ingest gmail --full
+</code></pre>
+<p>The parser prefers schema.org JSON-LD <code>Order</code> markup, which many retailers embed
+for Google's package tracking. It is exact — order number, per-item names,
+quantities, prices — and beats HTML scraping. Emails without it fall back to
+regex for order number and total, producing an order with no itemization, which
+is flagged as a coverage gap rather than passed off as complete.</p>
+<h3 id="amazon-business-the-reconciliation-api">Amazon Business — the Reconciliation API</h3>
+<pre><code>GET {region-host}/reconciliation/2021-01-08/transactions
+    ?feedStartDate=&amp;feedEndDate=&amp;nextPageToken=
+</code></pre>
+<p>Auth is Login with Amazon: a long-lived refresh token is exchanged for a
+one-hour access token. Configure <code>OKEY_AMAZON_CLIENT_ID</code>,
+<code>OKEY_AMAZON_CLIENT_SECRET</code> and <code>OKEY_AMAZON_REFRESH_TOKEN</code>, then
+<code>okey ingest amazon --full</code>.</p>
+<blockquote>
+<p><strong>Access is gated</strong> and approval is not guaranteed. Use the data export
+instead — it works today with no approval and feeds the same parser:</p>
+<p><code>bash
+okey amazon              # prints the steps
+okey ingest amazon-csv   # after unzipping the export into data/imports/amazon</code></p>
+<p>The export is one row per item. Rows sharing an Order ID are grouped back into
+orders; <code>Cancelled</code> is normalized so cancelled orders stay out of every total;
+and <code>Not Available</code> prices are kept NULL rather than read as <code>0.00</code>, then
+reported by <code>okey report priceless</code> — an item with no price is unknown, not
+free.</p>
+<p>Amazon's own documentation disagrees with itself on the host
+(<code>na.business-api.amazon.com</code> vs <code>api.business.amazon.com</code>) and on the rate
+limit (0.5/s vs 2/s). Both are configurable; the defaults take the
+conservative reading.</p>
+</blockquote>
+<h3 id="plaid-what-actually-left-the-account">Plaid — what actually left the account</h3>
+<p>Orders say what was bought; transactions say what was paid. The gap between them
+is where the findings are: yard labor and cash purchases with no email trail,
+duplicate charges, and refunds promised but never received.</p>
+<p>Uses <code>/transactions/sync</code> with a persisted cursor. Run <code>okey plaid link</code> to
+connect an institution, then <code>okey ingest plaid</code>.</p>
+<h2 id="classification">Classification</h2>
+<p>Two independent questions, answered in three passes.</p>
+<p><strong>Relevance</strong> — is this purchase for the vessel at all? <strong>System</strong> — which of the
+30 boat systems does it belong to?</p>
+<ol>
+<li><strong>Rules</strong> (free, instant, auditable) handle what keywords settle with high
+   precision. They answer only what they can answer; everything else is left
+   <code>NULL</code>.</li>
+<li><strong>LLM pass</strong> (<code>okey classify --llm</code>) handles the rest, with the vessel
+   specification in its system prompt. This is the point of the whole design: a
+   TP-Link PoE switch is an ordinary household purchase in the abstract, but
+   against a boat running six 4K PoE cameras it is obviously part of the camera
+   system. The prompt is stable across batches and marked for prompt caching, so
+   the spec and catalog are billed once.</li>
+<li><strong>Human review</strong> (<code>okey review</code>) clears anything still ambiguous or
+   low-confidence. Manual verdicts are final — neither rules nor the LLM will
+   overwrite them.</li>
+</ol>
+<p>Clear it from the CLI:</p>
+<pre><code class="language-bash">okey review                                              # see the queue
+okey review --item 5 --mark boat --system solar_generation
+</code></pre>
+<h2 id="boat-systems">Boat systems</h2>
+<p>Thirty systems, built around this vessel. Power is split six ways —
+<code>solar_generation</code>, <code>energy_storage</code>, <code>power_conversion</code>, <code>generator</code>,
+<code>ac_distribution</code>, <code>dc_distribution</code> — because each is independently budgeted
+and independently capable of overrunning. Sailing systems are absent by design.
+Each system is flagged capital or consumable. See
+<code>src/opheliaskey/classify/taxonomy.py</code>.</p>
+<h2 id="risk-findings">Risk findings</h2>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>budget_overrun</code></td>
+<td>System spend exceeds its budget line</td>
+</tr>
+<tr>
+<td><code>window_expiring</code></td>
+<td>A return or warranty window closes within 30 days</td>
+</tr>
+<tr>
+<td><code>refund_outstanding</code></td>
+<td>A refund was initiated but never completed</td>
+</tr>
+<tr>
+<td><code>spend_without_receipt</code></td>
+<td>A bank charge with no matching order — real spend, no itemization</td>
+</tr>
+<tr>
+<td><code>orders_unreconciled</code></td>
+<td>An order with no matching bank charge</td>
+</tr>
+<tr>
+<td><code>coverage_gap</code></td>
+<td>Order totals exceed their line items, tax and shipping</td>
+</tr>
+<tr>
+<td><code>unclassified</code></td>
+<td>Boat line items with no system attributed</td>
+</tr>
+<tr>
+<td><code>unreviewed_relevance</code></td>
+<td>Items not yet confirmed boat or personal — the total's error bar</td>
+</tr>
+<tr>
+<td><code>vendor_concentration</code></td>
+<td>Over half of spend with a single supplier</td>
+</tr>
+</tbody>
+</table>
+<h2 id="specification-risk">Specification risk</h2>
+<p>Receipts answer what something cost. They cannot answer whether it will work.
+<code>okey report spec</code> compares the vessel's installed specification against what
+the hardware can actually deliver:</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Question it answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bms_headroom</code></td>
+<td>Can the bank deliver what the inverter will ask of it?</td>
+</tr>
+<tr>
+<td><code>ac_startup_surge</code></td>
+<td>Will the air conditioner actually start on inverter power?</td>
+</tr>
+<tr>
+<td><code>solar_nameplate_gap</code></td>
+<td>What will the array really produce, versus its rating?</td>
+</tr>
+<tr>
+<td><code>solar_cannot_sustain_ac</code></td>
+<td>Can solar carry the primary load, or is the generator load-bearing?</td>
+</tr>
+<tr>
+<td><code>battery_runtime</code></td>
+<td>How long does the primary load run on the bank alone?</td>
+</tr>
+<tr>
+<td><code>mppt_ceiling</code></td>
+<td>Does the controller cap the array — and does that cap actually bind?</td>
+</tr>
+<tr>
+<td><code>string_voltage_unverified</code></td>
+<td>Does the string stay inside the MPPT's input window when hot?</td>
+</tr>
+<tr>
+<td><code>house_bank_charging_unspecified</code></td>
+<td>Does the isolated 12V bank have a way to charge?</td>
+</tr>
+<tr>
+<td><code>generator_leg_capacity</code></td>
+<td>How much of the generator's rating is usable at 120V?</td>
+</tr>
+</tbody>
+</table>
+<p><strong>These are estimates from stated specifications, not measurements.</strong> Every
+judgement call lives in one <code>ASSUMPTIONS</code> table, is cited by each finding that
+depends on it, and is visible with <code>okey report spec --assumptions</code>. Any spec
+value can be corrected without touching code by writing <code>spec.&lt;key&gt;</code> into
+<code>project_meta</code> — an override that makes a finding disappear is the finding
+working correctly, not being silenced.</p>
+<p>A check that finds nothing wrong returns nothing. None of them fabricate
+reassurance.</p>
+<h2 id="reward">Reward</h2>
+<p>The honest starting point: <strong>refit spend does not return dollar-for-dollar at
+resale, and most of it never will.</strong> A reward module that implied otherwise
+would be flattering and useless.</p>
+<p><code>okey report reward</code> measures what can be defended, in four separate lenses
+that are deliberately <strong>never summed</strong> — they measure different things, and
+adding them would double-count:</p>
+<table>
+<thead>
+<tr>
+<th>Lens</th>
+<th>What it answers</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Recoverable vs startup investment</td>
+<td>What a buyer plausibly pays for, and what it took to start</td>
+<td>Declared per-system recovery rates</td>
+</tr>
+<tr>
+<td>Labor avoided</td>
+<td>Work performed instead of purchased</td>
+<td><strong>Recorded</strong> hours — never estimated</td>
+</tr>
+<tr>
+<td>Capability delivered</td>
+<td>Days of autonomy, AC runtime, $/kWh, $/W at real output</td>
+<td>The same spec the risk checks read</td>
+</tr>
+<tr>
+<td>Use value</td>
+<td>Cost per night aboard, and break-even against the alternative</td>
+<td><strong>Recorded</strong> nights aboard</td>
+</tr>
+</tbody>
+</table>
+<p>Two deliberate constraints:</p>
+<p><strong>Labor and nights are recorded, not estimated.</strong> Guessing install hours would
+manufacture return out of nothing, so both come from <code>okey log</code>. With nothing
+logged, the report says so rather than inventing a figure.</p>
+<p><strong>Use value amortizes the startup-investment portion only.</strong> The recoverable portion is not
+consumed by using the boat, so charging it against nights aboard would
+double-count it.</p>
+<p>Recovery rates are heuristics with wide error bars — electronics date fastest
+(20–25%), documented engine work holds best (50%), and anything consumed is 0%.
+They live in one declared table with a stated basis per system, visible via
+<code>okey report reward --assumptions</code>, for the same reason the specification
+assumptions do: a number you cannot see is a number you cannot argue with.</p>
+<h2 id="floating-studio">Floating studio</h2>
+<p>The boat is also a stage. Songwriters perform aboard, the set is livestreamed
+over the Starlink already fitted, the audio runs through an Audient iD4 mkII,
+and live lyrics from <strong>Lyric Show</strong> — the caption and translation app — are composited
+onto the stream through its OBS browser-source overlay. The stream is the
+marketing: viewers watch the overlay work and install the app — and the buyer
+is the traveler, anyone across a language line who sees two-language captions
+on screen and wants Conversation Mode on a phone of their own.</p>
+<p><code>okey report studio</code> answers four questions, separately, and states which of
+them it can actually answer:</p>
+<table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Can the bank power a show, and how many?</td>
+<td>The same <code>load_spec</code> the risk checks read — arithmetic</td>
+</tr>
+<tr>
+<td>Can Starlink carry the stream?</td>
+<td>Declared upload range against encoder bitrate, with stated headroom</td>
+</tr>
+<tr>
+<td>What does the studio cost beyond what is aboard?</td>
+<td>A priced kit list, checked against the ledger</td>
+</tr>
+<tr>
+<td>What does a show plausibly return?</td>
+<td>A <strong>model</strong> — declared conversion rates, replaced by recorded shows</td>
+</tr>
+</tbody>
+</table>
+<p>The return comes in three figures that are <strong>reported separately</strong>:
+subscription revenue is recurring money, paid installs displaced is a cost not
+incurred, and the catalog of recorded performances is an asset the module
+does not price. Adding them would put three units in one number; a test pins
+the absence of a combined figure, as it does for reward.</p>
+<p><strong>Who buys.</strong> Two segments, by need, each with its own conversion rates, plan
+and churn, kept apart all the way to the steady state and summed only there.
+Travelers come first: the owner has been told by every traveler met so far
+that the on-screen instant translation of Conversation Mode is what they would
+subscribe for, and the model carries that premise as declared, arguable
+assumptions rather than a fact — 70% of any audience is there for Conversation
+Mode (<code>traveler_share</code>), 4% of them install after seeing two-language captions
+on screen (<code>traveler_viewer_to_install</code>) and 25% of those start the featured
+Base + Conversation Mode bundle within 30 days (<code>traveler_install_to_paid</code>); the
+two rates multiply to the stated 1% of viewers becoming subscribers, the
+report prints that product under the funnel, and <code>--traveler-share 0</code> shows
+what is left without them. The dock crowd at a competition night are travelers
+too: they had the two-language demo in person, so their installs pay at the
+traveler rate and land on the bundle. Performers — streamers, worship teams,
+the original funnel — are the second segment, on the original rates and the
+original plans.</p>
+<p><strong>Realistic defaults.</strong> The performer rates are benchmarks, each noted as such
+in the assumption table: 2.5% of performer-share stream viewers install after
+an explicit on-screen ask (passive click-to-install runs 1–3%), 5% of installs
+start a paid plan within 30 days (freemium utility apps convert 2–5%), 12% of
+dock attendees install with the QR in front of them, and 35% of paying
+performers are on annual billing, priced at the annual price ÷ 12 — 60% of
+travelers, who plan trips ahead; travelers churn at 6% a month between trips,
+performers at 8%. Plan prices are facts, not assumptions — Base $14.99/mo ·
+$99.99/yr, Ultimate $49.99/mo · $399.99/yr, Pro Broadcast $39.99/mo as an
+add-on, Conversation Mode $4.99/mo · $39.99/yr and the Base + Conversation Mode
+bundle $19.98/mo · $139.98/yr — verified live against
+<a href="https://lyricshow.live/pricing">https://lyricshow.live/pricing</a> on 2026-08-22 and read from the app's own
+tier file, so a price change belongs in one place. On the boat alone — the
+partner audience below entered as 0 — 1,200 viewers a month are 840 travelers
+and 360 performers, 57 installs become 12.45 new subscribers (12 of them on
+the bundle), the steady state is 205.6 subscribers — 200 travelers, 5.6
+performers — at a blended ARPU of $15.41 and $2,675.16/mo net, and the kit
+pays back in month 3. The declared defaults add the one committed partner and
+read 21,200 viewers, 2,632.7 steady subscribers and $34,519.72/mo — a headline
+that rests on an estimate, and says so.</p>
+<p><strong>Reach and the target.</strong> The boat is not the only stage the overlay is on.
+Partner channels are data — one <code>PARTNERS</code> row each, committed first: the
+partner church, which already has the overlay and will caption its four Sunday
+live streams a month, and the partner artist, a Spanish-language artist with 6.19M
+YouTube subscribers who <em>might</em> stream a live set through it. A committed
+partner is counted by default; a prospective one is off until
+<code>--with-hypothetical</code> counts it. An artist's viewers a stream are subscribers ×
+<code>partner_live_share</code> (2%); a church's are its live viewers a stream — the partner
+church's figure is not on this machine, so it is a labelled <strong>ESTIMATE</strong>
+(5,000 a stream) until <code>okey studio partner church --live-viewers N</code>
+enters the channel's own number; the headline, the Reach panel and the row all
+say ESTIMATE until then. Partner viewers join the stream audience before the
+traveler/performer split and convert at the same rates; each row's abroad
+figure is its declared international share — declared, not measured — and the
+languages line (20 base · 80 in all) is why one stream reaches every country
+its audience is in. The target — 3,000 paying subscribers by month 3
+(<code>--target</code>, <code>--target-month</code>) — is read against the trajectory: where the book
+stands that month, when (if ever) it is reached, the shortfall, and what it
+would take at the current rates — new paid a month, viewers a month, and what
+that is per show at the current cadence. At the defaults it is 2,548.8 short;
+with the partner artist counted, 145,000 viewers a month reach it in month 3 — on track.</p>
+<p><strong>Baseline and ROI.</strong> Today's paying subscribers live in App Store Connect,
+Google Play and the Firestore entitlements, not on this machine, so they are
+declared rather than read: <code>okey studio baseline --subscribers N</code> writes the
+figure, <code>--clear</code> forgets it, and 0 reads as <em>not entered</em>, not zero. The
+trajectory starts at the baseline, but kit payback, slip coverage, project
+payback and the ROI multiples are read off the <strong>show-driven</strong> columns — the
+baseline's own decaying remainder subtracted — because the studio cannot claim
+return from subscribers it did not bring; a large baseline moves the book,
+never the kit. The ROI panel prints the kit's multiple at month 12 and at the
+horizon, its share of project spend, net per show and per viewer, what the kit
+costs per year-one install against the $3.50 paid CPI, and the payback months.</p>
+<p><strong>Recorded beats modeled.</strong> Every funnel input states whether it is <code>assumed</code>,
+<code>observed</code>, an <code>override</code>, or a <code>project_meta</code> correction. From the first show
+logged, the observed viewers per set, the observed stream install rate, the
+observed competition multiple and the counted dock crowd replace the assumed
+ones — each drawn only from the rows that support it (a set's
+install rate needs both counts on the same set; a competition night's audience
+is kept out of the per-set average), and each naming how many rows that was:</p>
+<pre><code class="language-bash">okey log show --date 2026-08-22 --platform youtube --title &quot;Set one&quot; \
+    --minutes 110 --peak 80 --unique 140 --installs 6
+</code></pre>
+<p>Leave a count out when nobody wrote it down — a missing number is not a zero,
+and the report keeps the difference; a negative count is refused at the prompt,
+and an observation outside the range an override is held to is listed as
+ignored and left out of the funnel. Every conversion rate lives in one declared
+table, visible with <code>--assumptions</code>, overridable per run (<code>--viewers</code>, <code>--shows</code>,
+<code>--install-rate</code>, <code>--paid-rate</code>, <code>--churn</code>, <code>--events</code>, <code>--attendees</code>,
+<code>--traveler-share</code>, <code>--traveler-paid</code>, <code>--with-hypothetical</code>,
+<code>--partner-live-share</code>, <code>--target</code>, <code>--target-month</code>) or
+permanently via <code>studio.&lt;key&gt;</code> in <code>project_meta</code>. The headline says which
+observable inputs are observed, modeled or overridden, so it can never disagree
+with the funnel's source column; the kit prints as a priced list with whatever
+ledger lines match it and the inherited A/V and connectivity spend once the
+ledger attributes it. The dashboard's <strong>/studio</strong> page shows the same report
+with sliders for the same inputs, and <code>--html studio.html</code> writes it as a
+standalone page that needs no server.</p>
+<p><strong>Competition nights.</strong> The boat also hosts Paradise Busker song competitions.
+Acts rotate across three stages — the cockpit deck under the hardtop, the swim
+platform at the waterline, and the rear dock where the crowd stands, scans the
+QR and votes — and the same Lyric Show overlay that captions the stream
+captions the dock screen. One show, two audiences: viewers online and attendees
+on the pier, each converting at its own declared rate and kept apart all the
+way to installs. The report prints the night's flow — from the blind two-version
+round through the vote, the tip, proof of presence and the Codex score to the
+KEY WEST, PARADISE BUSKER coin — with the steps where Lyric Show is on screen
+marked, and Paradise Busker's facts cited to their sources. What the competition
+itself earns is its economy, not the studio's, and none of it is added to the
+return. Log a night with <code>okey log show --kind competition --attendees 55</code>; the
+counted crowd replaces the assumed one, and <code>--events</code> / <code>--attendees</code> are the
+per-run what-ifs.</p>
+<h2 id="insurance-schedule">Insurance schedule</h2>
+<p><code>okey report insurance --pdf schedule.pdf</code> produces a document for an
+underwriter: equipment fitted to the vessel, plus the professional labor that
+fitted it.</p>
+<p>It is deliberately narrower than the cost report. Slip fees, registration,
+title, insurance premiums, transport, storage, consumables and tools are
+excluded — each by a named rule the PDF prints, with its amount, so the
+schedule states its own boundaries rather than quietly narrowing the picture.
+Any single item can be forced in or out with <code>--insurable</code> / <code>--not-insurable</code>,
+and a hand-excluded item still appears in the excluded list.</p>
+<p><strong>Vessel attribution matters here.</strong> Invoices exist in the same mailbox for a
+previous boat. Orders carry a <code>vessel</code> field and the schedule filters on it, so
+a prior vessel's work can never land on this one's schedule.</p>
+<h2 id="recording-invoices-by-hand">Recording invoices by hand</h2>
+<p>Most real marine invoices arrive as a PDF attachment or a portal link with no
+amount in the email body — Shopmonkey shops (AVC Marine, Poseidon Marine) and
+marina statements both work this way. No parser can recover those, so:</p>
+<pre><code class="language-bash">okey add invoice 1526.17 --vendor &quot;Port Royale Marina&quot; --system moorage \
+    --date 2026-08-22 --ref PR-2026-08 --note &quot;September slip&quot;
+okey systems          # list the system keys
+okey report unpriced  # invoices the parser found but could not price
+</code></pre>
+<h2 id="committed-work">Committed work</h2>
+<p>Every other figure in this project is backward-looking. <code>okey add commitment</code>
+records work that is authorized or scheduled but not yet invoiced, which is the
+difference between <em>what has this cost</em> and <em>what will it cost</em>.</p>
+<pre><code class="language-bash">okey add commitment &quot;Exhaust hose replacement&quot; --vendor &quot;Poseidon Marine&quot; \
+    --system propulsion --scheduled 2026-08-25 --ref 1228
+okey report commitments
+okey add invoiced 1228        # close it once the invoice is recorded
+</code></pre>
+<p>Commitments live in their own table, so they can never leak into spend. Omit
+<code>--estimate</code> when the cost is genuinely unknown: it stays NULL rather than
+becoming zero, and every report states how many commitments are unpriced, so
+the estimate is never mistaken for the total.</p>
+<h2 id="tests">Tests</h2>
+<pre><code class="language-bash">.venv/bin/python -m pytest tests/ -q
+.venv/bin/ruff check src tests
+</code></pre>
+<p>The database, <code>.env</code> and <code>secrets/</code> are gitignored; the dashboard binds to <code>127.0.0.1</code>
+and the review endpoints reject cross-origin and cross-site requests, so a page open in
+your browser cannot POST to the local ledger.</p>
+<h2 id="privacy">Privacy</h2>
+<p><code>data/</code>, <code>.env</code> and <code>secrets/</code> are gitignored. The database holds personal
+purchase history and never leaves the machine; the dashboard binds to
+<code>127.0.0.1</code> by default.</p>
+<p>The dashboard is read-only; nothing in the browser can change the ledger.</p>
+<h2 id="license">License</h2>
+<p><img src="https://img.shields.io/badge/License-Proprietary-C41E3A?style=for-the-badge" alt="Proprietary" /></p>
+<p>© 2025–2026 Phygital DevOps Inc. All rights reserved.</p>
+<p>This repository is proprietary. It is a private tool built for the <strong>Ophelia's Key</strong>
+vessel project, and the code, the boat-system taxonomy, the specification models and the
+purchase data it operates on may not be reused, redistributed or incorporated into other
+work without written permission. It holds personal purchase history and financial detail
+and is not intended for public distribution. Third-party dependencies (Typer, Rich,
+FastAPI, Pydantic, the Anthropic and Google API clients, Plaid access, and the rest)
+remain under their own respective licenses.</p>
+<h2 id="contributing">Contributing</h2>
+<p>Interested in contributing? Email and put <strong>"Request to push to GitHub Repo"</strong> in the
+subject line and we can discuss.</p>
+<p>Conventions that matter here:</p>
+<ul>
+<li><strong>The raw store is immutable.</strong> Fetchers only ever append to <code>raw_documents</code>; every
+  order and line item is derived and rebuildable with <code>okey parse --reparse</code>.</li>
+<li><strong>Never guess.</strong> Unclassifiable stays <code>NULL</code>, an ambiguous match stays unreconciled,
+  and an unknown price stays <code>NULL</code> — surfaced in a report, not filled in.</li>
+<li><strong>Money is integer cents.</strong> No floats in a dollar path.</li>
+<li><strong>Recorded, not estimated.</strong> Labor hours and nights aboard come from <code>okey log</code>;
+  nothing manufactures return out of a guess.</li>
+<li>Commits use imperative mood; branch with PRs; keep <code>ruff</code> clean.</li>
+</ul>
+<h2 id="questions">Questions</h2>
+<p>For any questions, please reach out:</p>
+<ul>
+<li>General &mdash; <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#109;&#105;&#99;&#97;&#104;&#114;&#101;&#97;&#100;&#109;&#103;&#109;&#116;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">&#109;&#105;&#99;&#97;&#104;&#114;&#101;&#97;&#100;&#109;&#103;&#109;&#116;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;</a></li>
+<li>Phygital DevOps business &mdash; <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#109;&#105;&#99;&#97;&#104;&#64;&#108;&#121;&#114;&#105;&#99;&#115;&#104;&#111;&#119;&#46;&#108;&#105;&#118;&#101;">&#109;&#105;&#99;&#97;&#104;&#64;&#108;&#121;&#114;&#105;&#99;&#115;&#104;&#111;&#119;&#46;&#108;&#105;&#118;&#101;</a></li>
+</ul>
+<hr />
+<h3 id="created-by">Created by</h3>
+<p>Micah Read</p>
+<pre align="center">
+ .d88888b.   8888888b.   888    888  8888888888  888       8888888         d8888  d8b   .d8888b.
+d88P" "Y88b  888   Y88b  888    888  888         888         888          d88888  88P  d88P  Y88b
+888     888  888    888  888    888  888         888         888         d88P888  8P   Y88b.
+888     888  888   d88P  8888888888  8888888     888         888        d88P 888  "     "Y888b.
+888     888  8888888P"   888    888  888         888         888       d88P  888           "Y88b.
+888     888  888         888    888  888         888         888      d88P   888             "888
+Y88b. .d88P  888         888    888  888         888         888     d8888888888       Y88b  d88P
+ "Y88888P"   888         888    888  8888888888  88888888  8888888  d88P     888        "Y8888P"
+
+888    d8P   8888888888  Y88b   d88P
+888   d8P    888          Y88b d88P
+888  d8P     888           Y88o88P
+888d88K      8888888        Y888P
+8888888b     888             888
+888  Y88b    888             888
+888   Y88b   888             888
+888    Y88b  8888888888      888
+</pre>
+  </main>
+
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2025–2026 Phygital DevOps Inc. · Micah Read</span>
+    <span>Generated from the repository markdown by <code style="font-family:var(--mono);font-size:11px">tools/build_manual.py</code></span>
+  </div>
+</footer>
+
+<script>
+  // Scroll-spy: light up the section the reader is in.
+  (function () {
+    var links = {};
+    document.querySelectorAll('.side a[href^="#"]').forEach(function (a) {
+      links[a.getAttribute('href').slice(1)] = a;
+    });
+    var current = null;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting && links[e.target.id]) {
+          if (current) current.classList.remove('on');
+          current = links[e.target.id];
+          current.classList.add('on');
+        }
+      });
+    }, { rootMargin: '-60px 0px -70% 0px' });
+    document.querySelectorAll('.doc h2[id]').forEach(function (h) { io.observe(h); });
+  })();
+</script>
+
+</body>
+</html>
