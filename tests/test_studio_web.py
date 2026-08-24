@@ -179,9 +179,10 @@ def test_export_route_serves_standalone(client):
 def test_every_page_has_the_site_nav(client):
     # /review is a first-class page: the dashboard surfaces a review queue, and
     # without somewhere to act on it the queue is only an observation.
-    for path in ("/", "/studio", "/studio/full", "/review"):
+    for path in ("/ledger", "/studio", "/studio/full", "/review"):
         html = client.get(path).text
         assert 'class="sitenav"' in html, path
+        assert 'href="/ledger"' in html, path
         assert 'href="/studio"' in html and 'href="/studio/full"' in html, path
         assert 'href="/review"' in html, path
         assert 'aria-current="page"' in html, path
@@ -190,4 +191,11 @@ def test_every_page_has_the_site_nav(client):
 
 
 def test_page_links_from_dashboard(client):
-    assert 'href="/studio"' in client.get("/").text
+    assert 'href="/studio"' in client.get("/ledger").text
+
+
+def test_root_serves_the_site(client):
+    # The landing page is the front door; docs and numbers are one link away.
+    home = client.get("/").text
+    assert 'href="ledger"' in home
+    assert 'href="manual/"' in home
