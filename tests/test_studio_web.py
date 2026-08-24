@@ -194,6 +194,14 @@ def test_page_links_from_dashboard(client):
     assert 'href="/studio"' in client.get("/ledger").text
 
 
+def test_favicon_is_served(client):
+    """Browsers request /favicon.ico even when a page declares its own icon.
+    Without a route it 404s on every page view, in the log and the console."""
+    res = client.get("/favicon.ico")
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("image/svg+xml")
+
+
 def test_root_serves_the_site(client):
     # The landing page is the front door; docs and numbers are one link away.
     home = client.get("/").text

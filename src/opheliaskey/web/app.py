@@ -91,6 +91,13 @@ def dashboard(request: Request):
     )
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Browsers fall back to /favicon.ico even when a page declares its own
+    icon, so serve it rather than logging a 404 on every page view."""
+    return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
+
+
 @app.get("/api/ping")
 def api_ping():
     """Liveness probe for the site pages: statically hosted copies use this to
