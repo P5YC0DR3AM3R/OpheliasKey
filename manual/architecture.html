@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — Ophelia's Key</title>
+<meta name="description" content="Documentation for Ophelia's Key (okey), purchase intelligence for a liveaboard refit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050a12'/%3E%3Cpath d='M4 21h20l4-6H6z' fill='none' stroke='%234fe3ff' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='10' r='2.4' fill='%23ffb347'/%3E%3Cpath d='M2 25h28' stroke='%234fe3ff' stroke-opacity='.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #050a12; --surface: #0b1420; --surface-2: #0f1b2b;
+    --line: #17263a; --line-2: #1f3249;
+    --ink: #dbe8f5; --ink-2: #a9bbcf; --dim: #7f95ad; --mute: #4d6178;
+    --holo: #4fe3ff; --holo-soft: rgba(79,227,255,.14); --holo-line: rgba(79,227,255,.55);
+    --warm: #ffb347;
+    --display: "Chakra Petch", "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 15px/1.62 var(--sans); -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(1100px 500px at 50% -10%, rgba(79,227,255,.06), transparent 60%),
+      linear-gradient(rgba(79,227,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,227,255,.03) 1px, transparent 1px);
+    background-size: auto, 48px 48px, 48px 48px;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px);
+    mix-blend-mode: screen;
+  }
+  a { color: var(--holo); text-decoration: none; } a:hover { text-decoration: underline; }
+
+  /* ---------- top bar ---------- */
+  .mast { position: sticky; top: 0; z-index: 40; background: rgba(5,10,18,.92);
+          backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+  .mast-in { max-width: 1180px; margin: 0 auto; padding: 13px 22px;
+             display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap; }
+  .eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+             color: var(--dim); display: flex; gap: 14px; flex-wrap: wrap; }
+  .eyebrow b { color: var(--holo); font-weight: 500; }
+  .eyebrow a { color: inherit; } .eyebrow a:hover { color: var(--holo); text-decoration: none; }
+  .topnav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono);
+          letter-spacing: .08em; text-transform: uppercase; padding: 6px 9px;
+          border: 1px solid var(--line-2); color: var(--ink-2); background: var(--surface); }
+  a.chip:hover { text-decoration: none; border-color: var(--holo-line); color: var(--holo); }
+  .chip.here { border-color: var(--holo-line); color: var(--holo); }
+
+  /* ---------- frame ---------- */
+  .frame { max-width: 1180px; margin: 0 auto; padding: 28px 22px 80px;
+           display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 34px; align-items: start; }
+  @media (max-width: 900px) { .frame { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- sidebar ---------- */
+  .side { position: sticky; top: 66px; max-height: calc(100vh - 82px); overflow-y: auto;
+          padding-right: 6px; scrollbar-width: thin; }
+  .side h4 { margin: 18px 0 8px; font: 600 10px/1 var(--mono); letter-spacing: .18em;
+             text-transform: uppercase; color: var(--mute); }
+  .side h4:first-child { margin-top: 2px; }
+  .side h4::before { content: "// "; }
+  .side a { display: block; padding: 5px 10px; margin: 1px 0; font: 500 12px/1.4 var(--mono);
+            letter-spacing: .04em; color: var(--dim); border-left: 1px solid var(--line-2); }
+  .side a:hover { color: var(--holo); text-decoration: none; border-left-color: var(--holo-line); }
+  .side a.page { color: var(--ink-2); text-transform: uppercase; letter-spacing: .1em; font-size: 11px; }
+  .side a.page.here { color: var(--holo); border-left-color: var(--holo); background: var(--holo-soft); }
+  .side a.on { color: var(--holo); border-left-color: var(--holo); }
+  @media (max-width: 900px) {
+    .side { position: static; max-height: none; border: 1px solid var(--line);
+            background: var(--surface); padding: 6px 14px 14px; }
+    details.menu summary { cursor: pointer; list-style: none; font: 600 11px/1 var(--mono);
+      letter-spacing: .16em; text-transform: uppercase; color: var(--holo); padding: 10px 0; }
+    details.menu summary::before { content: "▤ "; }
+  }
+  @media (min-width: 901px) { details.menu { display: contents; } details.menu summary { display: none; } }
+
+  /* ---------- document ---------- */
+  .doc { min-width: 0; }
+  .doc-head { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 26px; }
+  .doc-head h1 { margin: 0 0 8px; font: 700 clamp(26px, 4vw, 38px)/1.05 var(--display);
+                 letter-spacing: .01em; text-transform: uppercase; }
+  .doc-head h1 span { color: var(--holo); text-shadow: 0 0 18px rgba(79,227,255,.4); }
+  .doc-head p { margin: 0; color: var(--ink-2); max-width: 72ch; }
+  .doc-head p code { font-size: 13px; }
+
+  .doc h2 { margin: 44px 0 14px; font: 700 20px/1.2 var(--display); letter-spacing: .03em;
+            text-transform: uppercase; color: var(--ink); padding-bottom: 8px;
+            border-bottom: 1px solid var(--line); }
+  .doc h2::before { content: "// "; color: var(--holo); }
+  .doc h3 { margin: 26px 0 8px; font: 600 15px/1.3 var(--display); letter-spacing: .04em;
+            text-transform: uppercase; color: var(--ink); }
+  .doc h2[id], .doc h3[id] { scroll-margin-top: 74px; }
+  .doc p, .doc li { color: var(--ink-2); }
+  .doc p { margin: 0 0 12px; max-width: 78ch; }
+  .doc strong { color: var(--ink); }
+  .doc em { color: var(--ink); font-style: italic; }
+  .doc ul, .doc ol { margin: 0 0 14px; padding-left: 22px; }
+  .doc li { margin-bottom: 5px; }
+  .doc hr { border: 0; border-top: 1px solid var(--line); margin: 34px 0; }
+  .doc code { font: 12.5px var(--mono); background: var(--surface-2); border: 1px solid var(--line);
+              padding: 1px 6px; border-radius: 3px; color: var(--ink-2); }
+  .doc pre { background: #030710; border: 1px solid var(--line); padding: 13px 16px; margin: 0 0 14px;
+             font: 12.5px/1.6 var(--mono); color: var(--ink-2); overflow-x: auto; }
+  .doc pre code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; }
+  .doc pre[align="center"] { text-align: left; background: transparent; border: 0;
+      color: var(--holo); text-shadow: 0 0 8px rgba(79,227,255,.45);
+      font-size: clamp(4.5px, calc((100vw - 120px) / 102), 10px); line-height: 1.18; }
+  .doc blockquote { margin: 0 0 14px; padding: 12px 16px; border-left: 2px solid var(--holo-line);
+                    background: var(--surface); }
+  .doc blockquote p { margin-bottom: 8px; } .doc blockquote p:last-child { margin-bottom: 0; }
+  .doc table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 0 0 18px;
+               display: block; overflow-x: auto; }
+  .doc th { font: 600 10.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+            color: var(--dim); text-align: left; padding: 0 14px 8px 0;
+            border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+  .doc td { padding: 8px 14px 8px 0; border-bottom: 1px solid var(--line); color: var(--ink-2);
+            vertical-align: top; }
+  .doc tr:last-child td { border-bottom: 0; }
+  .doc img { max-width: 100%; }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--line); }
+  .foot { max-width: 1180px; margin: 0 auto; padding: 20px 22px 34px;
+          display: flex; justify-content: space-between; gap: 12px 30px; flex-wrap: wrap;
+          font: 400 12.5px/1.6 var(--sans); color: var(--mute); }
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="mast-in">
+    <div class="eyebrow">
+      <span><a href="../"><b>OPHELIA'S KEY</b></a></span>
+      <span>SHIP'S&nbsp;MANUAL</span>
+    </div>
+    <nav class="topnav">
+      <a class="chip" href="../">Home</a>
+      <a class="chip" href="index.html">The manual</a>
+      <a class="chip here" href="architecture.html">Architecture</a>
+      <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="frame">
+
+  <nav class="side" aria-label="Manual navigation">
+    <details class="menu" open>
+      <summary>Menu</summary>
+      <h4>Pages</h4>
+      <a class="page" href="index.html">The manual</a>
+      <a class="page here" href="architecture.html">Architecture</a>
+      <h4>On this page</h4>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#why-raw-capture-is-separate">Why raw capture is separate</a>
+      <a href="#refusal-as-a-design-principle">Refusal as a design principle</a>
+      <a href="#vendor-identity">Vendor identity</a>
+      <a href="#money">Money</a>
+      <a href="#schema-layers">Schema layers</a>
+      <a href="#two-kinds-of-risk">Two kinds of risk</a>
+      <a href="#human-review">Human review</a>
+      <a href="#known-limitations">Known limitations</a>
+      <a href="#on-reward-analysis">On reward analysis</a>
+      <a href="#the-floating-studio">The floating studio</a>
+    </details>
+  </nav>
+
+  <main class="doc">
+    <div class="doc-head">
+      <h1><span>Architecture</span></h1>
+      <p>Design notes: the pipeline, the immutable raw store, refusal as a principle, and how the studio model stays honest.</p>
+    </div>
+<h2 id="pipeline">Pipeline</h2>
+<pre><code>  Gmail API ─┐
+Amazon B. API ├─► raw_documents ──► parse ──► orders ──► classify ──► reports
+  Plaid API ─┘   (immutable,        stage    line_items    (systems)   cost
+                  compressed)                                          risk
+                                                    │
+                              transactions ─────────┴──► reconcile
+</code></pre>
+<p>Four stages, each independently re-runnable:</p>
+<ol>
+<li><strong>Ingest</strong> — sources fetch bytes and call <code>store_raw</code>. They never write to
+   <code>orders</code> or <code>line_items</code>.</li>
+<li><strong>Parse</strong> — raw documents become orders, line items and transactions.</li>
+<li><strong>Classify</strong> — two independent questions per line item: is it project spend
+   (relevance), and which system does it belong to. Three passes: rules, then
+   LLM with vessel context, then human review.</li>
+<li><strong>Analyze</strong> — cost, risk and reconciliation reports read the normalized
+   tables.</li>
+</ol>
+<h2 id="why-raw-capture-is-separate">Why raw capture is separate</h2>
+<p>Email parsers are never finished. A new vendor, a changed template, or a bug
+found six months in would otherwise mean re-walking the mailbox — slow, rate
+limited, and impossible for data since deleted. Because the raw bytes are kept,
+<code>okey parse --reparse</code> rebuilds every derived row from scratch in seconds.</p>
+<p><code>raw_documents</code> is keyed on <code>(source, external_id, content_hash)</code>. Re-fetching an
+unchanged document is a no-op; a <em>changed</em> one is stored as a new version beside
+the old. Nothing is ever overwritten, so an order that shipped, a transaction
+that settled, and a price that was adjusted are all recoverable.</p>
+<h2 id="refusal-as-a-design-principle">Refusal as a design principle</h2>
+<p>Three places deliberately decline rather than guess:</p>
+<ul>
+<li><strong>Classification.</strong> Below the confidence floor, <code>system_id</code> stays <code>NULL</code> and
+  the amount appears under <code>unclassified</code> in the risk report.</li>
+<li><strong>Relevance.</strong> When keywords indicate both boat and personal, or neither, the
+  rules return nothing rather than picking a side. The item defers to the LLM,
+  and from there to a human. Undecided spend is reported as its own figure, so
+  the project total always states how far it could move.</li>
+<li><strong>Reconciliation.</strong> Two candidate charges of the same amount in the same week
+  produce no link. A wrong link would corrupt both the unreconciled-orders and
+  spend-without-receipt signals simultaneously.</li>
+<li><strong>Money parsing.</strong> <code>money()</code> returns <code>None</code> for anything it cannot parse
+  exactly, rather than coercing to zero.</li>
+</ul>
+<p>In each case the unresolved amount is reported as a number, so the gap is
+visible rather than absorbed.</p>
+<h2 id="vendor-identity">Vendor identity</h2>
+<p>One merchant appears as <code>orders@westmarine.com</code> in email, <code>West Marine</code> in an
+API payload, and <code>WESTMARINE #0231 WATSONVILLE CA</code> on a card statement. Without
+collapsing these, every per-vendor total fragments across store locations.</p>
+<p><code>vendor_aliases</code> maps each observed form to one vendor row. Card descriptors are
+first matched against known-merchant patterns, and only fall back to a
+normalized two-token key when the merchant is unrecognized.</p>
+<h2 id="money">Money</h2>
+<p>Integer cents throughout — schema, parsing, analysis. <code>money()</code> is the single
+coercion point and <code>fmt_money()</code> the single rendering point. No float ever
+touches a dollar figure.</p>
+<h2 id="schema-layers">Schema layers</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Tables</th>
+<th>Rebuildable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw capture</td>
+<td><code>raw_documents</code></td>
+<td>No — this is the source of truth</td>
+</tr>
+<tr>
+<td>Commerce</td>
+<td><code>orders</code>, <code>line_items</code>, <code>shipments</code>, <code>refunds</code>, <code>item_windows</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Money</td>
+<td><code>accounts</code>, <code>transactions</code>, <code>reconciliations</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Planning</td>
+<td><code>boat_systems</code>, <code>budget_lines</code>, <code>project_meta</code></td>
+<td>Seeded / user-entered</td>
+</tr>
+<tr>
+<td>Bookkeeping</td>
+<td><code>sync_state</code>, <code>vendors</code>, <code>vendor_aliases</code></td>
+<td>Partly</td>
+</tr>
+</tbody>
+</table>
+<h2 id="two-kinds-of-risk">Two kinds of risk</h2>
+<p><code>risk_report</code> returns two separate lists, deliberately not merged:</p>
+<ul>
+<li><strong>Purchase risk</strong> comes from receipts — budget overruns, unreconciled
+  charges, refunds that never landed, spend not yet reviewed.</li>
+<li><strong>Specification risk</strong> comes from the installed spec — whether the BMS can
+  feed the inverter, whether the array can carry the load.</li>
+</ul>
+<p>They answer different questions from different data sources. Blending them
+would let "your compressor may not start" render as a spending problem, and
+would put an engineering constraint in a table with a dollar column where it
+does not belong.</p>
+<p>Specification checks follow the same refusal principle as the rest of the
+system: assumptions are declared in one table rather than buried in the
+arithmetic, each finding names the assumptions it rests on, and a check with
+nothing to report returns an empty list rather than a reassuring one. Severity
+distinguishes "fails under every estimate" from "fails under the pessimistic
+one" — collapsing those would either overstate certainty or hide a real risk
+behind a favourable assumption.</p>
+<h2 id="human-review">Human review</h2>
+<p>The queue is the gate every downstream figure depends on. It is cleared from the
+CLI (<code>okey review</code>, <code>okey review --item N --mark boat --system …</code>); manual
+verdicts are final, and neither the rules nor the LLM pass will overwrite them.
+The web dashboard is read-only — it shows the queue but does not change the
+ledger.</p>
+<h2 id="known-limitations">Known limitations</h2>
+<ul>
+<li><strong>Amazon Business API access is gated</strong> and may not be granted. The CSV export
+  path exists for that reason and feeds the same parser.</li>
+<li><strong>Heuristic email parsing yields totals without itemization.</strong> These orders
+  are counted in net spend but contribute nothing to system-level breakdowns —
+  the <code>coverage_gap</code> finding quantifies exactly how much.</li>
+<li><strong>Rule-based classification has a ceiling.</strong> It handles distinctive marine
+  vocabulary well, but generic hardware is genuinely undecidable from keywords —
+  which is what the LLM pass, with the vessel spec as context, exists to resolve.</li>
+<li><strong>The LLM pass costs money and needs credentials.</strong> It is opt-in
+  (<code>--llm</code>) rather than part of the default classify run.</li>
+<li><strong>Reward analysis is not yet implemented.</strong> See below.</li>
+<li><strong>Specification checks are estimates, not measurements.</strong> They flag what to
+  verify; they do not replace a meter. Several explicitly ask for a number that
+  is missing from the spec (panel Vmp/Voc, compressor LRA, inverter surge
+  rating and duration) rather than guessing it.</li>
+</ul>
+<h2 id="on-reward-analysis">On reward analysis</h2>
+<p>Refit spend does not return dollar-for-dollar at resale, and most of it never
+does. That is the premise the reward module is built on, not a caveat appended
+to it.</p>
+<p>Four lenses, returned as four separate keys and never summed into a headline
+"total return". Recoverable-vs-sunk, labor avoided, capability delivered, and
+use value measure genuinely different things; adding them would double-count
+the same dollars under different names. A test pins the absence of a combined
+figure, because that is exactly the number a future edit would be tempted to
+add.</p>
+<p>Two components are <strong>recorded rather than estimated</strong>. Labor hours and nights
+aboard cannot be derived from receipts, and estimating them would manufacture
+return out of nothing — so they come from <code>okey log</code>, and the report states
+plainly when nothing has been logged instead of filling the gap with a default.</p>
+<p>Use value amortizes the <strong>sunk</strong> portion only. The recoverable portion is not
+consumed by using the boat; charging it against nights aboard would count it
+twice, once as resale value and once as use.</p>
+<p>Capability figures read the same <code>load_spec</code> the risk checks use, so the
+capability panel and the risk findings are incapable of disagreeing about the
+vessel.</p>
+<h2 id="the-floating-studio">The floating studio</h2>
+<p><code>analysis/studio.py</code> treats the vessel as a production stage: a livestreamed
+set, audio through an Audient iD4 mkII, live lyrics from Lyric Show composited
+through its OBS overlay, and the stream as the app's marketing. It follows the
+reward module's rules rather than inventing its own.</p>
+<p>Power and uplink are arithmetic from the installed specification — the same
+<code>load_spec</code> and efficiency assumptions the risk checks and the capability lens
+read, so a show's power figures cannot disagree with the rest of the project
+about the same battery. The kit is a price list checked against the ledger.
+The return is a <em>model</em>: a chain of conversion rates declared in one
+<code>STUDIO_ASSUMPTIONS</code> table, every one of them arguable, resolved through the
+same ladder as the spec (declared → <code>project_meta</code> → explicit override), with
+each funnel input reporting where its value came from.</p>
+<p>Three return lenses, returned as three keys and never summed. Subscription
+revenue is recurring money; acquisition displaced is a cost not incurred; the
+catalog of recorded performances is an asset nobody here can price, so it is
+counted in songs and marked unpriced. A "total return" would add a revenue
+stream to an avoided cost to a thing with no price — three units in one number
+— and a test pins its absence, for the same reason the reward test does.</p>
+<p><strong>Recorded beats modeled.</strong> <code>show_log</code> holds what the shows actually did; from
+the first row, the observed viewers per set, the observed stream install rate,
+the observed competition multiple and the counted dock crowd replace the
+assumed inputs — each drawn only from the rows that can support it (the rate
+from sets with both counts on the same set; the per-set average without the
+competition nights' multiplied audience) and each saying how many rows that
+was. NULL counts stay NULL, because "no installs were attributed" and "nobody
+wrote the number down" are different statements; an observation outside the
+range an override is held to is reported and ignored, never modeled. Inherited
+capital — Starlink, the cameras, the sound system — is reported as unpriced
+until the ledger attributes spend to A/V or connectivity, rather than guessed
+at.</p>
+<p><strong>Attendees are a second audience, not more viewers.</strong> A competition night puts
+a crowd on the rear dock, and a dock is not a stream: the attendee stands in
+front of the captions with the QR on the overlay and a phone in hand, so their
+install rate is its own declared assumption and the two audiences stay apart all
+the way to installs, summed only then — a blended rate would hide which audience
+a number came from. What the competition itself earns is Paradise Busker's
+economy: reported as the setting, never summed into the return.</p>
+<p><strong>Two segments by need.</strong> <code>traveler_share</code> of any audience is there for
+Conversation Mode and the rest are performers, the original funnel; each has
+its own install rate, paid rate, plan (the Base + Conversation Mode bundle
+against the performer mix), annual share and churn, runs to its own steady
+state and is summed only there, with plan shares derived from the volumes. The
+traveler rates carry the stated 1%-of-viewers premise as declared
+assumptions. The dock counts as travelers: an attendee had the two-language
+demo in person, so dock installs pay at the traveler rate and land on the
+bundle, and a test pins that <code>traveler_share</code> 0 leaves the performer funnel.</p>
+<p><strong>Reach and the target.</strong> Partners are rows of data in <code>PARTNERS</code>, committed
+first; each names the one assumption holding its audience figure, its streams a
+month and a declared international share. Committed partners are counted by
+default, hypothetical ones only when <code>partners_include_hypothetical</code> is 1;
+counted viewers join the stream audience before the traveler/performer split,
+so <code>reach</code> and <code>funnel</code> cannot disagree. A figure the machine cannot read is a
+labelled estimate (<code>placeholder</code> True on the row) until <code>okey studio partner</code>
+writes <code>studio.partner_&lt;key&gt;_…</code> to <code>project_meta</code>. <code>target</code> reads the stated
+target against the rounded trajectory — standing, reached month or None,
+shortfall, and the closed-form new paid and viewers a month it would take at
+the traveler churn and current yield; a target of 0 is no target.</p>
+<p><strong>Payback counts show-driven revenue only.</strong> The trajectory can start at a
+declared baseline — today's paying subscribers, entered with <code>okey studio
+baseline</code> because the stores and Firestore hold the real figure and 0 reads as
+"not entered" — but the baseline, a mixed book nobody has split by need,
+decays at the performer churn and earns the blended ARPU (stated, not hidden),
+its remainder is subtracted from every row, and kit payback, slip coverage,
+project payback and the ROI multiples are read off the show-driven columns.
+The studio cannot claim to have paid for itself with subscribers it did not
+bring: a large baseline moves the book, never the kit's return, and a test pins
+that the breakeven months do not move when the baseline does.</p>
+  </main>
+
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2025–2026 Phygital DevOps Inc. · Micah Read</span>
+    <span>Generated from the repository markdown by <code style="font-family:var(--mono);font-size:11px">tools/build_manual.py</code></span>
+  </div>
+</footer>
+
+<script>
+  // Scroll-spy: light up the section the reader is in.
+  (function () {
+    var links = {};
+    document.querySelectorAll('.side a[href^="#"]').forEach(function (a) {
+      links[a.getAttribute('href').slice(1)] = a;
+    });
+    var current = null;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting && links[e.target.id]) {
+          if (current) current.classList.remove('on');
+          current = links[e.target.id];
+          current.classList.add('on');
+        }
+      });
+    }, { rootMargin: '-60px 0px -70% 0px' });
+    document.querySelectorAll('.doc h2[id]').forEach(function (h) { io.observe(h); });
+  })();
+</script>
+
+</body>
+</html>
