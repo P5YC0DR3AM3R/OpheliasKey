@@ -194,7 +194,7 @@ src/opheliaskey/
   config.py         Pydantic settings, read from .env
   sources/          ingestion: gmail, amazon_business, amazon_csv, plaid
   parsing/          raw documents -> orders + line items (JSON-LD + vendor parsers)
-  classify/         relevance + system: rules, llm, taxonomy (26 boat systems)
+  classify/         relevance + system: rules, llm, taxonomy (30 boat systems)
   analysis/         cost, risk, spec, reward, insurance, reconcile, commitments
   db/               SQLite schema + access (integer cents throughout)
   web/              FastAPI dashboard + the keyboard-driven review UI
@@ -326,7 +326,7 @@ connect an institution, then `okey ingest plaid`.
 Two independent questions, answered in three passes.
 
 **Relevance** — is this purchase for the vessel at all? **System** — which of the
-26 boat systems does it belong to?
+30 boat systems does it belong to?
 
 1. **Rules** (free, instant, auditable) handle what keywords settle with high
    precision. They answer only what they can answer; everything else is left
@@ -350,7 +350,7 @@ okey review --item 5 --mark boat --system solar_generation
 
 ## Boat systems
 
-Twenty-six systems, built around this vessel. Power is split six ways —
+Thirty systems, built around this vessel. Power is split six ways —
 `solar_generation`, `energy_storage`, `power_conversion`, `generator`,
 `ac_distribution`, `dc_distribution` — because each is independently budgeted
 and independently capable of overrunning. Sailing systems are absent by design.
@@ -684,30 +684,25 @@ For any questions, please reach out:
 
 Micah Read
 
-<pre align="center"><font size="1">
- .d88888b. 8888888b. 888    8888888888888888     8888888       d8888d8b 
-d88P" "Y88b888   Y88b888    888888       888       888        d8888888P 
-888     888888    888888    888888       888       888       d88P8888P  
-888     888888   d88P88888888888888888   888       888      d88P 888"   
-888     8888888888P" 888    888888       888       888     d88P  888    
-888     888888       888    888888       888       888    d88P   888    
-Y88b. .d88P888       888    888888       888       888   d8888888888    
- "Y88888P" 888       888    8888888888888888888888888888d88P     888    
-                                                                        
-                                                                        
-                                                                        
- .d8888b.    888    d8P 8888888888Y88b   d88P 
-d88P  Y88b   888   d8P  888        Y88b d88P  
-Y88b.        888  d8P   888         Y88o88P   
- "Y888b.     888d88K    8888888      Y888P    
-    "Y88b.   8888888b   888           888     
-      "888   888  Y88b  888           888     
-Y88b  d88P   888   Y88b 888           888     
- "Y8888P"    888    Y88b8888888888    888     
-                                              
-                                              
-                                              
-</font></pre>
+<pre align="center">
+ .d88888b.   8888888b.   888    888  8888888888  888       8888888         d8888  d8b   .d8888b.
+d88P" "Y88b  888   Y88b  888    888  888         888         888          d88888  88P  d88P  Y88b
+888     888  888    888  888    888  888         888         888         d88P888  8P   Y88b.
+888     888  888   d88P  8888888888  8888888     888         888        d88P 888  "     "Y888b.
+888     888  8888888P"   888    888  888         888         888       d88P  888           "Y88b.
+888     888  888         888    888  888         888         888      d88P   888             "888
+Y88b. .d88P  888         888    888  888         888         888     d8888888888       Y88b  d88P
+ "Y88888P"   888         888    888  8888888888  88888888  8888888  d88P     888        "Y8888P"
+
+888    d8P   8888888888  Y88b   d88P
+888   d8P    888          Y88b d88P
+888  d8P     888           Y88o88P
+888d88K      8888888        Y888P
+8888888b     888             888
+888  Y88b    888             888
+888   Y88b   888             888
+888    Y88b  8888888888      888
+</pre>
 
 <!-- Animated Wave Footer -->
 <p align="center">

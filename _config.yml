@@ -1,0 +1,13 @@
+title: Ophelia's Key
+description: Purchase intelligence for the Ophelia's Key vessel project
+
+# The site is the hand-built index.html; keep source, tests and private
+# screenshots out of the published artifact.
+exclude:
+  - README.md
+  - docs/
+  - src/
+  - tests/
+  - secrets/
+  - pyproject.toml
+  - .env.example
