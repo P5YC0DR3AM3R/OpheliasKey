@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ophelia's Key — Purchase Intelligence</title>
+<meta name="description" content="Ophelia's Key (okey) turns the paper trail of a liveaboard boat refit into a queryable ledger: Gmail, Amazon Business and Plaid in; cost, risk, reward and a floating studio model out.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050a12'/%3E%3Cpath d='M4 21h20l4-6H6z' fill='none' stroke='%234fe3ff' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='10' r='2.4' fill='%23ffb347'/%3E%3Cpath d='M2 25h28' stroke='%234fe3ff' stroke-opacity='.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* ------------------------------------------------------------------
+     Bridge console. Same visual world as the okey dashboard: a dark
+     navy ground, a cyan hologram for the instrument chrome, one warm
+     accent reserved for the product (Lyric Show). The nameplate is the
+     CLI's own banner, promoted to signage.
+     ------------------------------------------------------------------ */
+  :root {
+    color-scheme: dark;
+    --ground: #050a12;
+    --surface: #0b1420;
+    --surface-2: #0f1b2b;
+    --line: #17263a;
+    --line-2: #1f3249;
+    --ink: #dbe8f5;
+    --ink-2: #a9bbcf;
+    --dim: #7f95ad;
+    --mute: #4d6178;
+    --holo: #4fe3ff;
+    --holo-soft: rgba(79,227,255,.14);
+    --holo-line: rgba(79,227,255,.55);
+    --warm: #ffb347;
+    --warm-soft: rgba(255,179,71,.16);
+    --good: #0ca30c; --warn: #fab219;
+    --display: "Chakra Petch", "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(1200px 600px at 50% -10%, rgba(79,227,255,.07), transparent 60%),
+      linear-gradient(rgba(79,227,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,227,255,.035) 1px, transparent 1px);
+    background-size: auto, 48px 48px, 48px 48px;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px);
+    mix-blend-mode: screen;
+  }
+  a { color: var(--holo); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font: 12.5px var(--mono); background: var(--surface-2); border: 1px solid var(--line);
+         padding: 1px 6px; border-radius: 3px; color: var(--ink-2); white-space: nowrap; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 22px 70px; }
+
+  /* ---------- masthead ---------- */
+  .mast { display: flex; justify-content: space-between; align-items: baseline; gap: 14px 28px;
+          flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+             color: var(--dim); display: flex; gap: 14px; flex-wrap: wrap; }
+  .eyebrow b { color: var(--holo); font-weight: 500; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono);
+          letter-spacing: .08em; text-transform: uppercase; padding: 6px 9px;
+          border: 1px solid var(--line-2); color: var(--ink-2); background: var(--surface); }
+  .chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); display: inline-block; }
+  .chip.holo { border-color: var(--holo-line); color: var(--holo); }
+  .chip.holo i { background: var(--holo); box-shadow: 0 0 8px var(--holo); }
+  .chip.warm { border-color: rgba(255,179,71,.5); color: var(--warm); }
+  .chip.warm i { background: var(--warm); }
+  a.chip:hover { text-decoration: none; border-color: var(--holo-line); color: var(--holo); }
+
+  /* ---------- nameplate hero ---------- */
+  .hero { padding: 54px 0 10px; text-align: center; }
+  .hero .prompt { font: 500 12px/1 var(--mono); color: var(--mute); letter-spacing: .1em;
+                  margin-bottom: 18px; }
+  .hero .prompt b { color: var(--dim); font-weight: 500; }
+  .banner { display: inline-block; text-align: left; margin: 0 auto; max-width: 100%;
+            overflow-x: auto; padding: 6px 4px 10px; }
+  .banner pre {
+    margin: 0; font-family: var(--mono);
+    font-size: clamp(4.5px, calc((100vw - 76px) / 60), 11.5px);
+    line-height: 1.18; color: var(--holo);
+    text-shadow: 0 0 8px rgba(79,227,255,.55), 0 0 26px rgba(79,227,255,.28);
+  }
+  .banner pre + pre { margin-top: .9em; }
+  .tagline { font: 700 clamp(15px, 2.4vw, 21px)/1.3 var(--display); text-transform: uppercase;
+             letter-spacing: .06em; color: var(--ink); margin: 26px 0 10px; text-wrap: balance; }
+  .tagline em { color: var(--holo); font-style: normal; }
+  .lede { color: var(--ink-2); max-width: 74ch; margin: 0 auto; font-size: 15.5px; text-wrap: pretty; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 26px 0 8px; }
+  .btn { display: inline-flex; align-items: center; gap: 9px; font: 600 12.5px/1 var(--mono);
+         letter-spacing: .1em; text-transform: uppercase; padding: 13px 20px;
+         border: 1px solid var(--holo-line); color: var(--holo); background: var(--holo-soft);
+         clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+         transition: background .15s ease, color .15s ease; }
+  .btn:hover { background: rgba(79,227,255,.24); text-decoration: none; }
+  .btn.ghost { border-color: var(--line-2); color: var(--ink-2); background: var(--surface); }
+  .btn.ghost:hover { border-color: var(--holo-line); color: var(--holo); }
+
+  /* ---------- stat rail ---------- */
+  .rail { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--line);
+          border: 1px solid var(--line); margin: 40px 0 14px; }
+  .cell { background: var(--surface); padding: 14px 14px 12px; text-align: left; }
+  .cell b { display: block; font: 700 19px/1.1 var(--display); color: var(--ink); letter-spacing: .02em; }
+  .cell span { display: block; font: 500 10.5px/1.35 var(--mono); letter-spacing: .1em;
+               text-transform: uppercase; color: var(--dim); margin-top: 5px; }
+  @media (max-width: 900px) { .rail { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 520px) { .rail { grid-template-columns: repeat(2, 1fr); } }
+
+  /* ---------- plates ---------- */
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; align-items: stretch;
+          margin-top: 14px; }
+  .plate { grid-column: span 12; position: relative; background: var(--surface);
+           border: 1px solid var(--line); padding: 18px 20px 20px;
+           clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px); }
+  .plate::before, .plate::after {
+    content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
+    border-color: var(--holo-line); border-style: solid; }
+  .plate::before { top: -1px; right: -1px; border-width: 1px 1px 0 0; }
+  .plate::after  { bottom: -1px; left: -1px; border-width: 0 0 1px 1px; }
+  .span6 { grid-column: span 6; } .span4 { grid-column: span 4; } .span8 { grid-column: span 8; }
+  @media (max-width: 940px) { .span6, .span4, .span8 { grid-column: span 12; } }
+  .ph { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+        margin-bottom: 12px; flex-wrap: wrap; }
+  .ph h2 { margin: 0; font: 600 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+           color: var(--holo); }
+  .ph h2::before { content: "// "; color: var(--mute); }
+  .ph .note { font: 400 12.5px/1.4 var(--sans); color: var(--dim); }
+  .plate p { color: var(--ink-2); font-size: 14px; margin: 0 0 10px; max-width: 80ch; }
+  .plate p:last-child { margin-bottom: 0; }
+  .plate p strong { color: var(--ink); }
+  .plate.warmline::before, .plate.warmline::after { border-color: rgba(255,179,71,.55); }
+  .plate.warmline .ph h2 { color: var(--warm); }
+
+  /* ---------- pipeline ---------- */
+  .flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+          font: 500 11.5px/1.2 var(--mono); letter-spacing: .06em; }
+  .flow .st { border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink-2);
+              padding: 9px 12px; text-transform: uppercase; }
+  .flow .st small { display: block; margin-top: 4px; font-size: 9.5px; color: var(--mute);
+                    letter-spacing: .08em; text-transform: none; }
+  .flow .st.src { border-style: dashed; color: var(--dim); }
+  .flow .st.key { border-color: var(--holo-line); color: var(--holo); background: rgba(79,227,255,.07); }
+  .flow .arrow { color: var(--mute); }
+
+  /* ---------- invariants ---------- */
+  .inv { border-left: 2px solid var(--holo-line); padding: 2px 0 2px 14px; margin-bottom: 14px; }
+  .inv:last-child { margin-bottom: 0; }
+  .inv h3 { margin: 0 0 4px; font: 600 13.5px/1.3 var(--display); letter-spacing: .05em;
+            text-transform: uppercase; color: var(--ink); }
+  .inv p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+  /* ---------- passes ---------- */
+  .pass { display: grid; grid-template-columns: 34px 1fr; gap: 12px; margin-bottom: 14px; }
+  .pass:last-child { margin-bottom: 0; }
+  .pass i { font: 700 15px/30px var(--display); text-align: center; width: 32px; height: 32px;
+            border: 1px solid var(--holo-line); color: var(--holo); font-style: normal; }
+  .pass h3 { margin: 1px 0 3px; font: 600 13.5px/1.3 var(--display); letter-spacing: .05em;
+             text-transform: uppercase; color: var(--ink); }
+  .pass p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+
+  /* ---------- reports table ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { font: 600 10.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+       color: var(--dim); text-align: left; padding: 0 10px 8px 0; border-bottom: 1px solid var(--line-2); }
+  td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); color: var(--ink-2);
+       vertical-align: top; }
+  td:first-child { white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+
+  /* ---------- terminal ---------- */
+  .term { background: #030710; border: 1px solid var(--line); padding: 14px 16px;
+          font: 13px/1.7 var(--mono); color: var(--ink-2); overflow-x: auto; }
+  .term .ps { color: var(--holo); }
+  .term .cmt { color: var(--mute); }
+  .term .out { color: var(--dim); }
+
+  /* ---------- footer ---------- */
+  .wave { display: block; width: 100%; height: 90px; margin-top: 46px; }
+  footer { border-top: 1px solid var(--line); }
+  .foot { max-width: 1180px; margin: 0 auto; padding: 26px 22px 40px;
+          display: flex; justify-content: space-between; gap: 18px 32px; flex-wrap: wrap;
+          font: 400 13px/1.7 var(--sans); color: var(--dim); }
+  .foot .col b { display: block; font: 600 11px/1 var(--mono); letter-spacing: .14em;
+                 text-transform: uppercase; color: var(--ink-2); margin-bottom: 8px; }
+  .foot .fine { flex-basis: 100%; border-top: 1px solid var(--line); padding-top: 16px;
+                font-size: 12px; color: var(--mute); max-width: 100ch; }
+
+  /* ---------- load choreography ---------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .rise { opacity: 0; transform: translateY(10px); animation: rise .6s ease forwards; }
+    .d1 { animation-delay: .05s; } .d2 { animation-delay: .15s; } .d3 { animation-delay: .25s; }
+    .d4 { animation-delay: .35s; } .d5 { animation-delay: .45s; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+    .banner pre { animation: powerup 1.1s ease .1s both; }
+    @keyframes powerup {
+      0% { opacity: 0; text-shadow: none; }
+      60% { opacity: 1; }
+      100% { opacity: 1; text-shadow: 0 0 8px rgba(79,227,255,.55), 0 0 26px rgba(79,227,255,.28); }
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="mast rise d1">
+    <div class="eyebrow">
+      <span><b>OPHELIA'S KEY</b></span>
+      <span>PURCHASE&nbsp;INTELLIGENCE</span>
+      <span>PHYGITAL&nbsp;DEVOPS</span>
+    </div>
+    <div class="chips">
+      <span class="chip"><i></i>VESSEL MT9740CA</span>
+      <span class="chip holo"><i></i>CLI · okey</span>
+      <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey"><i></i>GITHUB</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <p class="prompt rise d1"><b>micah@opheliaskey</b> ~ $ okey status</p>
+    <div class="banner" role="img" aria-label="Ophelia's Key">
+<pre aria-hidden="true">
+ .d88888b.   8888888b.   888    888  8888888888  888       8888888         d8888  d8b   .d8888b.
+d88P" "Y88b  888   Y88b  888    888  888         888         888          d88888  88P  d88P  Y88b
+888     888  888    888  888    888  888         888         888         d88P888  8P   Y88b.
+888     888  888   d88P  8888888888  8888888     888         888        d88P 888  "     "Y888b.
+888     888  8888888P"   888    888  888         888         888       d88P  888           "Y88b.
+888     888  888         888    888  888         888         888      d88P   888             "888
+Y88b. .d88P  888         888    888  888         888         888     d8888888888       Y88b  d88P
+ "Y88888P"   888         888    888  8888888888  88888888  8888888  d88P     888        "Y8888P"
+</pre>
+<pre aria-hidden="true">
+888    d8P   8888888888  Y88b   d88P
+888   d8P    888          Y88b d88P
+888  d8P     888           Y88o88P
+888d88K      8888888        Y888P
+8888888b     888             888
+888  Y88b    888             888
+888   Y88b   888             888
+888    Y88b  8888888888      888
+</pre>
+    </div>
+    <h1 class="tagline rise d2">Every dollar of a liveaboard refit — <em>ingested, gated, attributed</em></h1>
+    <p class="lede rise d3"><strong>Ophelia's Key</strong> (<code>okey</code>) turns the paper trail of a boat
+      refit into a queryable ledger. It pulls every purchase from Gmail, Amazon Business and the bank,
+      separates project spend from personal spend in a shared account, attributes each line item to a
+      boat system, and reports cost, budget variance and risk — and it would rather report
+      <code>NULL</code> than a plausible-looking wrong number.</p>
+    <div class="cta rise d4">
+      <a class="btn" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">View the repository</a>
+      <a class="btn ghost" href="#studio">The floating studio</a>
+    </div>
+  </section>
+
+  <section class="rail rise d5" aria-label="Vessel figures">
+    <div class="cell"><b>4 kW</b><span>Solar array</span></div>
+    <div class="cell"><b>15.36 kWh</b><span>LiFePO4 bank</span></div>
+    <div class="cell"><b>4 kW</b><span>Hybrid inverter</span></div>
+    <div class="cell"><b>8 kW</b><span>Backup generator</span></div>
+    <div class="cell"><b>30</b><span>Boat systems</span></div>
+    <div class="cell"><b>¢</b><span>Integer cents only</span></div>
+  </section>
+
+  <div class="grid">
+
+    <section class="plate span8">
+      <div class="ph"><h2>Pipeline</h2><span class="note">raw capture is immutable; everything after it is derived</span></div>
+      <div class="flow">
+        <span class="st src">Gmail<small>JSON-LD orders</small></span>
+        <span class="st src">Amazon<small>Business API / CSV</small></span>
+        <span class="st src">Plaid<small>bank transactions</small></span>
+        <span class="arrow">▶</span>
+        <span class="st key">raw_documents<small>compressed · immutable</small></span>
+        <span class="arrow">▶</span>
+        <span class="st">parse<small>orders + line items</small></span>
+        <span class="arrow">▶</span>
+        <span class="st">classify<small>rules · LLM · review</small></span>
+        <span class="arrow">▶</span>
+        <span class="st">reconcile<small>orders vs. bank</small></span>
+        <span class="arrow">▶</span>
+        <span class="st key">reports</span>
+      </div>
+      <p style="margin-top:14px">When a vendor parser improves, <code>okey parse --reparse</code> rebuilds
+        every derived table from the raw store — the mailbox is never re-walked, and yesterday's bug
+        does not become today's permanent record.</p>
+    </section>
+
+    <section class="plate span4">
+      <div class="ph"><h2>Try it</h2><span class="note">no credentials needed</span></div>
+      <div class="term" role="figure" aria-label="Demo commands">
+<span class="cmt"># 22 realistic mixed orders</span>
+<span class="ps">$</span> okey demo
+<span class="ps">$</span> okey classify
+<span class="ps">$</span> okey report cost
+<span class="ps">$</span> okey report risk
+<span class="out">findings: most severe first…</span>
+      </div>
+      <p style="margin-top:12px">Demo rows carry the source <code>demo</code> and can never be confused
+        with real data. The LLM pass additionally needs an Anthropic key.</p>
+    </section>
+
+    <section class="plate span6">
+      <div class="ph"><h2>Invariants</h2><span class="note">break one and the numbers stop being trustworthy</span></div>
+      <div class="inv">
+        <h3>Raw capture is separate from parsing</h3>
+        <p>Every fetched email, API response and bank transaction is stored compressed and immutable.
+           Orders and line items are derived, and rebuildable.</p>
+      </div>
+      <div class="inv">
+        <h3>Nothing is guessed</h3>
+        <p>Unclassifiable stays <code>NULL</code>. An ambiguous match stays unreconciled. An unknown
+           price stays <code>NULL</code> — surfaced in a report, not filled in.</p>
+      </div>
+      <div class="inv">
+        <h3>The total carries its own error bar</h3>
+        <p>Undecided spend is never folded silently into boat or personal; it is reported as its own
+           figure, so you know how far the headline number could still move.</p>
+      </div>
+      <div class="inv">
+        <h3>Money is integer cents</h3>
+        <p>No float ever touches a dollar figure — not in parsing, not in analysis, not in a report.</p>
+      </div>
+    </section>
+
+    <section class="plate span6">
+      <div class="ph"><h2>Classification</h2><span class="note">two questions · three passes</span></div>
+      <p><strong>Relevance</strong> — is this purchase for the vessel at all? <strong>System</strong> —
+         which of the 30 boat systems does it belong to?</p>
+      <div class="pass">
+        <i>1</i>
+        <div><h3>Rules</h3><p>Free, instant, auditable. They settle what keywords can settle with high
+          precision, and leave everything else <code>NULL</code>.</p></div>
+      </div>
+      <div class="pass">
+        <i>2</i>
+        <div><h3>LLM against the vessel spec</h3><p>A TP-Link PoE switch is a household gadget in the
+          abstract — against a boat running six 4K PoE cameras it is obviously camera infrastructure.
+          The spec is prompt-cached, billed once per batch.</p></div>
+      </div>
+      <div class="pass">
+        <i>3</i>
+        <div><h3>Human review</h3><p>The keyboard-driven queue clears anything still ambiguous.
+          Manual verdicts are final — neither the rules nor the LLM overwrite them.</p></div>
+      </div>
+    </section>
+
+    <section class="plate span6">
+      <div class="ph"><h2>Reports</h2><span class="note">each states what it can and cannot answer</span></div>
+      <table>
+        <thead><tr><th>Command</th><th>What it answers</th></tr></thead>
+        <tbody>
+          <tr><td><code>okey report cost</code></td><td>Spend by system, vendor and month</td></tr>
+          <tr><td><code>okey report risk</code></td><td>Findings, most severe first — overruns, closing return windows, refunds that never arrived</td></tr>
+          <tr><td><code>okey report spec</code></td><td>Engineering risk from the installed specification — can the bank actually start the AC?</td></tr>
+          <tr><td><code>okey report reward</code></td><td>What the spend returned, in four lenses that are deliberately never summed</td></tr>
+          <tr><td><code>okey report insurance</code></td><td>Equipment plus professional install, as a PDF for an underwriter</td></tr>
+          <tr><td><code>okey report studio</code></td><td>Can the boat power, stream and pay for a show — and what does one plausibly return?</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="plate span6 warmline" id="studio">
+      <div class="ph"><h2>The floating studio</h2><span class="note">the boat is also a stage</span></div>
+      <p>Songwriters perform aboard. The set is livestreamed over the Starlink already fitted, the audio
+         runs through an Audient iD4&nbsp;mkII, and live lyrics from
+         <a href="https://lyricshow.live"><strong>Lyric Show</strong></a> — the caption and translation
+         app — are composited onto the stream through its OBS overlay. The stream is the marketing:
+         viewers watch two-language captions work and install the app.</p>
+      <p>On competition nights the boat hosts <strong>Paradise Busker</strong> — acts rotate across the
+         cockpit deck, the swim platform and the rear dock, and the same overlay that captions the
+         stream captions the dock screen. One show, two audiences, each converting at its own declared
+         rate.</p>
+      <p><code>okey report studio</code> keeps the model honest: every funnel input states whether it is
+         assumed, observed or overridden, and from the first logged show, recorded numbers replace
+         modeled ones.</p>
+    </section>
+
+    <section class="plate span12">
+      <div class="ph"><h2>Privacy &amp; license</h2><span class="note">a private tool, in public view</span></div>
+      <p>The database holds personal purchase history and never leaves the machine; the dashboard binds
+         to <code>127.0.0.1</code> and is read-only. Data, environment and secrets are gitignored.
+         The code is proprietary — built for the Ophelia's Key vessel project — and the taxonomy,
+         specification models and purchase data may not be reused without written permission.
+         Interested in contributing? Email with <strong>"Request to push to GitHub Repo"</strong> in the
+         subject line.</p>
+    </section>
+
+  </div>
+</div>
+
+<svg class="wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="sea" x1="0" x2="1">
+      <stop offset="0" stop-color="#0B1E2A"/><stop offset=".5" stop-color="#17C3DE"/><stop offset="1" stop-color="#0B1E2A"/>
+    </linearGradient>
+  </defs>
+  <path d="M0,55 C240,20 480,85 720,55 C960,25 1200,80 1440,45 L1440,90 L0,90 Z"
+        fill="url(#sea)" opacity=".28"/>
+  <path d="M0,68 C260,40 520,92 780,66 C1040,40 1240,88 1440,60 L1440,90 L0,90 Z"
+        fill="url(#sea)" opacity=".5"/>
+</svg>
+
+<footer>
+  <div class="foot">
+    <div class="col">
+      <b>Created by</b>
+      Micah Read<br>Phygital DevOps Inc.
+    </div>
+    <div class="col">
+      <b>Contact</b>
+      <a href="mailto:micahreadmgmt@gmail.com">micahreadmgmt@gmail.com</a><br>
+      <a href="mailto:micah@lyricshow.live">micah@lyricshow.live</a>
+    </div>
+    <div class="col">
+      <b>Elsewhere</b>
+      <a href="https://github.com/P5YC0DR3AM3R/OpheliasKey">github.com/P5YC0DR3AM3R/OpheliasKey</a><br>
+      <a href="https://lyricshow.live">lyricshow.live</a>
+    </div>
+    <div class="fine">
+      © 2025–2026 Phygital DevOps Inc. All rights reserved. Built with Python 3.11, Typer, FastAPI,
+      Pydantic v2 and SQLite. Recorded, not estimated — <code>NULL</code> is a feature.
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
