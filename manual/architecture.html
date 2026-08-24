@@ -126,6 +126,16 @@
   .doc tr:last-child td { border-bottom: 0; }
   .doc img { max-width: 100%; }
 
+  /* ---------- live/static probe ---------- */
+  /* Served by okey, the numbers routes exist and the hint is noise; hosted
+     statically they would 404, so the links stand down instead. */
+  .server-hint { font: 400 11px/1.5 var(--sans); color: var(--mute); margin: 6px 0 0 10px; }
+  .server-hint code { font: 10.5px var(--mono); background: var(--surface-2);
+                      border: 1px solid var(--line); padding: 0 4px; }
+  body.live .server-hint { display: none; }
+  body.static-mode .needs-server { opacity: .4; pointer-events: none; }
+  body.static-mode .server-hint { color: var(--warm); }
+
   /* ---------- footer ---------- */
   footer { border-top: 1px solid var(--line); }
   .foot { max-width: 1180px; margin: 0 auto; padding: 20px 22px 34px;
@@ -145,7 +155,7 @@
       <a class="chip" href="../">Home</a>
       <a class="chip" href="index.html">The manual</a>
       <a class="chip here" href="architecture.html">Architecture</a>
-      <a class="chip" href="../ledger">Ledger</a>
+      <a class="chip needs-server" href="../ledger">Ledger</a>
       <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">GitHub</a>
     </nav>
   </div>
@@ -160,10 +170,11 @@
       <a class="page" href="index.html">The manual</a>
       <a class="page here" href="architecture.html">Architecture</a>
       <h4>The numbers</h4>
-      <a class="page" href="../ledger">Ledger</a>
-      <a class="page" href="../review">Review</a>
-      <a class="page" href="../studio">Growth</a>
-      <a class="page" href="../studio/full">Studio · full</a>
+      <a class="page needs-server" href="../ledger">Ledger</a>
+      <a class="page needs-server" href="../review">Review</a>
+      <a class="page needs-server" href="../studio">Growth</a>
+      <a class="page needs-server" href="../studio/full">Studio · full</a>
+      <p class="server-hint">Live pages — start the server with <code>okey serve</code>.</p>
       <h4>On this page</h4>
       <a href="#pipeline">Pipeline</a>
       <a href="#why-raw-capture-is-separate">Why raw capture is separate</a>
@@ -420,6 +431,12 @@ that the breakeven months do not move when the baseline does.</p>
 </footer>
 
 <script>
+  // Live/static probe: with no okey serve behind the page, the numbers links
+  // would 404 — stand them down and show the hint instead.
+  fetch('../api/ping').then(function (r) {
+    document.body.classList.add(r.ok ? 'live' : 'static-mode');
+  }).catch(function () { document.body.classList.add('static-mode'); });
+
   // Scroll-spy: light up the section the reader is in.
   (function () {
     var links = {};
