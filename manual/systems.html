@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vessel systems — Ophelia's Key</title>
+<meta name="description" content="How Ophelia's Key is put together: power, navigation, surveillance, network and broadcast, and the reasoning behind each choice.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050a12'/%3E%3Cpath d='M4 21h20l4-6H6z' fill='none' stroke='%234fe3ff' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='10' r='2.4' fill='%23ffb347'/%3E%3Cpath d='M2 25h28' stroke='%234fe3ff' stroke-opacity='.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #050a12; --surface: #0b1420; --surface-2: #0f1b2b;
+    --line: #17263a; --line-2: #1f3249;
+    --ink: #dbe8f5; --ink-2: #a9bbcf; --dim: #7f95ad; --mute: #4d6178;
+    --holo: #4fe3ff; --holo-soft: rgba(79,227,255,.14); --holo-line: rgba(79,227,255,.55);
+    --warm: #ffb347;
+    --display: "Chakra Petch", "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 15px/1.62 var(--sans); -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(1100px 500px at 50% -10%, rgba(79,227,255,.06), transparent 60%),
+      linear-gradient(rgba(79,227,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,227,255,.03) 1px, transparent 1px);
+    background-size: auto, 48px 48px, 48px 48px;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px);
+    mix-blend-mode: screen;
+  }
+  a { color: var(--holo); text-decoration: none; } a:hover { text-decoration: underline; }
+
+  /* ---------- top bar ---------- */
+  .mast { position: sticky; top: 0; z-index: 40; background: rgba(5,10,18,.92);
+          backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+  .mast-in { max-width: 1180px; margin: 0 auto; padding: 13px 22px;
+             display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap; }
+  .eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+             color: var(--dim); display: flex; gap: 14px; flex-wrap: wrap; }
+  .eyebrow b { color: var(--holo); font-weight: 500; }
+  .eyebrow a { color: inherit; } .eyebrow a:hover { color: var(--holo); text-decoration: none; }
+  .topnav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono);
+          letter-spacing: .08em; text-transform: uppercase; padding: 6px 9px;
+          border: 1px solid var(--line-2); color: var(--ink-2); background: var(--surface); }
+  a.chip:hover { text-decoration: none; border-color: var(--holo-line); color: var(--holo); }
+  .chip.here { border-color: var(--holo-line); color: var(--holo); }
+
+  /* ---------- frame ---------- */
+  .frame { max-width: 1180px; margin: 0 auto; padding: 28px 22px 80px;
+           display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 34px; align-items: start; }
+  @media (max-width: 900px) { .frame { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- sidebar ---------- */
+  .side { position: sticky; top: 66px; max-height: calc(100vh - 82px); overflow-y: auto;
+          padding-right: 6px; scrollbar-width: thin; }
+  .side h4 { margin: 18px 0 8px; font: 600 10px/1 var(--mono); letter-spacing: .18em;
+             text-transform: uppercase; color: var(--mute); }
+  .side h4:first-child { margin-top: 2px; }
+  .side h4::before { content: "// "; }
+  .side a { display: block; padding: 5px 10px; margin: 1px 0; font: 500 12px/1.4 var(--mono);
+            letter-spacing: .04em; color: var(--dim); border-left: 1px solid var(--line-2); }
+  .side a:hover { color: var(--holo); text-decoration: none; border-left-color: var(--holo-line); }
+  .side a.page { color: var(--ink-2); text-transform: uppercase; letter-spacing: .1em; font-size: 11px; }
+  .side a.page.here { color: var(--holo); border-left-color: var(--holo); background: var(--holo-soft); }
+  .side a.on { color: var(--holo); border-left-color: var(--holo); }
+  @media (max-width: 900px) {
+    .side { position: static; max-height: none; border: 1px solid var(--line);
+            background: var(--surface); padding: 6px 14px 14px; }
+    details.menu summary { cursor: pointer; list-style: none; font: 600 11px/1 var(--mono);
+      letter-spacing: .16em; text-transform: uppercase; color: var(--holo); padding: 10px 0; }
+    details.menu summary::before { content: "▤ "; }
+  }
+  @media (min-width: 901px) { details.menu { display: contents; } details.menu summary { display: none; } }
+
+  /* ---------- document ---------- */
+  .doc { min-width: 0; }
+  .doc-head { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 26px; }
+  .doc-head h1 { margin: 0 0 8px; font: 700 clamp(26px, 4vw, 38px)/1.05 var(--display);
+                 letter-spacing: .01em; text-transform: uppercase; }
+  .doc-head h1 span { color: var(--holo); text-shadow: 0 0 18px rgba(79,227,255,.4); }
+  .doc-head p { margin: 0; color: var(--ink-2); max-width: 72ch; }
+  .doc-head p code { font-size: 13px; }
+
+  .doc h2 { margin: 44px 0 14px; font: 700 20px/1.2 var(--display); letter-spacing: .03em;
+            text-transform: uppercase; color: var(--ink); padding-bottom: 8px;
+            border-bottom: 1px solid var(--line); }
+  .doc h2::before { content: "// "; color: var(--holo); }
+  .doc h3 { margin: 26px 0 8px; font: 600 15px/1.3 var(--display); letter-spacing: .04em;
+            text-transform: uppercase; color: var(--ink); }
+  .doc h2[id], .doc h3[id] { scroll-margin-top: 74px; }
+  .doc p, .doc li { color: var(--ink-2); }
+  .doc p { margin: 0 0 12px; max-width: 78ch; }
+  .doc strong { color: var(--ink); }
+  .doc em { color: var(--ink); font-style: italic; }
+  .doc ul, .doc ol { margin: 0 0 14px; padding-left: 22px; }
+  .doc li { margin-bottom: 5px; }
+  .doc hr { border: 0; border-top: 1px solid var(--line); margin: 34px 0; }
+  .doc code { font: 12.5px var(--mono); background: var(--surface-2); border: 1px solid var(--line);
+              padding: 1px 6px; border-radius: 3px; color: var(--ink-2); }
+  .doc pre { background: #030710; border: 1px solid var(--line); padding: 13px 16px; margin: 0 0 14px;
+             font: 12.5px/1.6 var(--mono); color: var(--ink-2); overflow-x: auto; }
+  .doc pre code { background: none; border: 0; padding: 0; font-size: inherit; color: inherit; }
+  .doc pre[align="center"] { text-align: left; background: transparent; border: 0;
+      color: var(--holo); text-shadow: 0 0 8px rgba(79,227,255,.45);
+      font-size: clamp(4.5px, calc((100vw - 120px) / 102), 10px); line-height: 1.18; }
+  .doc blockquote { margin: 0 0 14px; padding: 12px 16px; border-left: 2px solid var(--holo-line);
+                    background: var(--surface); }
+  .doc blockquote p { margin-bottom: 8px; } .doc blockquote p:last-child { margin-bottom: 0; }
+  .doc table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 0 0 18px;
+               display: block; overflow-x: auto; }
+  .doc th { font: 600 10.5px/1.3 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+            color: var(--dim); text-align: left; padding: 0 14px 8px 0;
+            border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+  .doc td { padding: 8px 14px 8px 0; border-bottom: 1px solid var(--line); color: var(--ink-2);
+            vertical-align: top; }
+  .doc tr:last-child td { border-bottom: 0; }
+  .doc img { max-width: 100%; }
+
+  /* ---------- live/static probe ---------- */
+  /* Served by okey, the numbers routes exist and the hint is noise; hosted
+     statically they would 404, so the links stand down instead. */
+  .server-hint { font: 400 11px/1.5 var(--sans); color: var(--mute); margin: 6px 0 0 10px; }
+  .server-hint code { font: 10.5px var(--mono); background: var(--surface-2);
+                      border: 1px solid var(--line); padding: 0 4px; }
+  body.live .server-hint { display: none; }
+  body.static-mode .needs-server { opacity: .4; pointer-events: none; }
+  body.static-mode .server-hint { color: var(--warm); }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--line); }
+  .foot { max-width: 1180px; margin: 0 auto; padding: 20px 22px 34px;
+          display: flex; justify-content: space-between; gap: 12px 30px; flex-wrap: wrap;
+          font: 400 12.5px/1.6 var(--sans); color: var(--mute); }
+</style>
+</head>
+<body>
+<header class="mast">
+  <div class="mast-in">
+    <div class="eyebrow">
+      <span><a href="../"><b>OPHELIA'S KEY</b></a></span>
+      <span>SHIP'S&nbsp;MANUAL</span>
+    </div>
+    <nav class="topnav">
+      <a class="chip" href="../">Home</a>
+      <a class="chip" href="index.html">The manual</a>
+      <a class="chip" href="architecture.html">Architecture</a>
+      <a class="chip here" href="systems.html">Systems</a>
+      <a class="chip needs-server" href="../ledger">Ledger</a>
+      <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="frame">
+  <nav class="side" aria-label="Manual navigation">
+    <details class="menu" open>
+      <summary>Menu</summary>
+      <h4>Pages</h4>
+      <a class="page" href="index.html">The manual</a>
+      <a class="page" href="architecture.html">Architecture</a>
+      <a class="page here" href="systems.html">Systems</a>
+      <h4>The numbers</h4>
+      <a class="page needs-server" href="../ledger">Ledger</a>
+      <a class="page needs-server" href="../review">Review</a>
+      <a class="page needs-server" href="../studio">Growth</a>
+      <a class="page needs-server" href="../studio/full">Studio · full</a>
+      <p class="server-hint">Live pages — start the server with <code>okey serve</code>.</p>
+      <h4>On this page</h4>
+      <a href="#topology">Topology</a>
+      <a href="#power">Power</a>
+      <a href="#helm">Helm and navigation</a>
+      <a href="#vision">Vision and security</a>
+      <a href="#net">Core networking</a>
+      <a href="#director">AI director</a>
+      <a href="#water">Water sports</a>
+      <a href="#principles">Design principles</a>
+      <a href="#method">Method</a>
+    </details>
+  </nav>
+
+  <main class="doc">
+  <div class="doc-head">
+    <h1>Vessel <span>systems</span></h1>
+    <p>How the boat is put together: power, navigation, surveillance, network and broadcast — and the reasoning behind each choice. Addresses, hardware identifiers and current fault state are deliberately omitted; this page documents architecture, not configuration.</p>
+  </div>
+
+  <h2 id="topology">Topology</h2>
+  <p>A single uplink feeds a firewall, which feeds one switch. Everything else hangs off that switch on one flat segment. No VLANs yet — the constraint is that both switches are unmanaged, so the network cannot be split at the switch.</p>
+  <pre><code>Starlink Roam
+ └─ OPNsense firewall          gateway · DHCP · DNS
+     └─ 8-port gigabit switch  LAN spine
+         ├─ workstation        broadcast + media
+         ├─ access point       boat-wide Wi-Fi
+         ├─ navigation bridge  N2K telemetry
+         ├─ camera NVR         PoE, 6 cameras
+         └─ agent host         sensors + automation</code></pre>
+  <p>The firewall's WAN sits behind Starlink's own router, so the boat runs double NAT. That is fine while nothing needs to be reachable from outside; if inbound ports are ever required, Starlink goes into Bypass mode rather than adding forwards at two layers.</p>
+  <blockquote><p><strong>Known single point of failure.</strong> One box carries routing, Wi-Fi, DNS, camera access and the stream. If it dies, all of them go at once. Worth knowing before it matters.</p></blockquote>
+
+  <h2 id="power">Power</h2>
+  <h3>Generation</h3>
+  <p>A 2,000 W flexible solar array handles the standing load. An 8,000 W inverter generator covers heavy AC draw and fast recharge cycles when solar cannot keep up.</p>
+  <h3>Storage</h3>
+  <p>12.8 V 600 Ah LiFePO₄ — roughly <code>7.7 kWh</code> usable. That bank carries every 12 V and 120 V load, the full IT stack and the dive-system chargers continuously, which is why the agent host was chosen for single-digit idle watts rather than raw speed.</p>
+
+  <h2 id="helm">Helm and navigation</h2>
+  <p>Instruments share an NMEA 2000 backbone.</p>
+  <ul>
+    <li><strong>Multifunction display with broadband radar</strong> — primary helm screen, radar overlaid for collision avoidance.</li>
+    <li><strong>In-hull depth transducer</strong> — shoots through solid fibreglass from inside the bilge. Nothing protrudes, which matters on Keys sandbars.</li>
+    <li><strong>Navigation bridge</strong> — GPS, heading, pitch and roll, and depth, published to both the helm display and the LAN.</li>
+    <li><strong>Autopilot</strong> — commanded over NMEA by the helm display and navigation software.</li>
+    <li><strong>Tide and weather station</strong> — NOAA tide curves, buoy data and wind vectors over Wi-Fi.</li>
+  </ul>
+  <blockquote><p><strong>The agent is read-only on navigation.</strong> It listens to the bus and records decoded messages, and has no command authority over the autopilot or course plotting. That boundary is architectural, not a setting — nothing in the agent's code path can write to the helm.</p></blockquote>
+
+  <h2 id="vision">Vision and security</h2>
+  <p>Six 5 MP pan-tilt cameras run off the recorder's built-in PoE, which keeps them on the recorder's own segment instead of the main network. Six budget cameras running vendor firmware do not belong on the same segment as the workstation and the firewall's admin interface.</p>
+  <p>Coverage splits between inward views for performance capture and outward views for waterline and dock approaches, with elevated positions for the wide master shot.</p>
+  <h3>Stream separation</h3>
+  <p>The agent pulls <strong>substreams</strong> over RTSP for motion detection and attention routing. The broadcast encoder takes <strong>mainstreams</strong>. Splitting them means situational awareness and the live stream never compete for the same bandwidth — the agent keeps working at full frame rate while the encoder is saturating the uplink.</p>
+
+  <h2 id="net">Core networking</h2>
+  <p>The firewall handles routing, DNS over TLS and network-level ad-blocking. Because both switches are unmanaged, adding a segment means adding a port at the router: a USB-to-Ethernet adapter with a Realtek RTL8153 or ASIX AX88179 chipset works without extra drivers and becomes a third interface. Camera isolation goes there.</p>
+  <p>Address planning matters more than usual afloat. Starlink's router hands out a common private range, so the LAN was moved off that range entirely — same subnet on both sides of a firewall breaks routing in ways that look like random connectivity loss.</p>
+
+  <h2 id="director">AI director</h2>
+  <p>The agent ingests camera feeds, multi-track audio and navigation telemetry to drive vision tracking and situational awareness, then issues local WebSocket commands to the broadcast software to switch angles, frame performers and render live ocean-telemetry overlays. Output encodes to YouTube and Twitch over the satellite uplink.</p>
+  <p>Offline, the same machine hosts a large emulation library — the boat is frequently out of coverage, and entertainment that depends on the uplink is entertainment that stops working at anchor.</p>
+
+  <h2 id="water">Water sports</h2>
+  <p>Two surface-supplied hookah dive systems recharge off the house bank, giving roughly two hours of bottom time without tanks. Knee, wake and surf boards cover open-water runs; clear-bottom kayaks and paddleboards are for reef viewing at anchor.</p>
+  <blockquote><p>Operating inside the Florida Keys National Marine Sanctuary. A 20″ × 24″ dive flag is required whenever the rigs are in the water, and there is no spearfishing and no take inside sanctuary zones.</p></blockquote>
+
+  <h2 id="principles">Design principles</h2>
+  <h3>Fault isolation over a single loop</h3>
+  <p>Each capability runs as its own service rather than as one scheduler. A slow API call in the reasoning layer must never delay an engine alarm, and the only reliable way to guarantee that is to keep them in separate processes with separate failure modes.</p>
+  <h3>Offline-first</h3>
+  <p>Full-text search over local storage rather than a hosted vector index. At sea the uplink is intermittent by nature, so any component that assumes connectivity is a component that fails exactly when it is needed.</p>
+  <h3>Identity in version control</h3>
+  <p>The agent's personality, configuration and knowledge live in git, not on a disk. That makes the whole thing hardware-portable and survivable — a dead SD card costs an afternoon, not the project.</p>
+  <h3>Substreams for machines, mainstreams for humans</h3>
+  <p>Stated above, but it generalises: give automated consumers the cheapest adequate feed and reserve full quality for the output anyone actually watches.</p>
+
+  <h2 id="method">Method</h2>
+  <p>Network state here is measured rather than assumed. A build sheet records what was intended; live capture records what is running, and on this boat the two have disagreed more than once. The general technique, without the specifics:</p>
+  <ul>
+    <li>Read the actual DHCP lease on an interface rather than trusting the configured address — that is how you catch a second DHCP server.</li>
+    <li>Enumerate hosts by multicast DNS service browsing, which names them instead of leaving you with a list of numbers.</li>
+    <li>Distinguish <em>closed</em> from <em>filtered</em>: a closed port refuses instantly, a firewalled one times out. Conflating the two sends you debugging a service that was never the problem.</li>
+    <li>Query each host directly for a public name to find resolvers that should not be answering.</li>
+  </ul>
+  <p>Every one of those is a two-second check that has, at least once, saved an afternoon.</p>
+</main>
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2025–2026 Phygital DevOps Inc. · Micah Read</span>
+    <span>Architecture only — no addresses, identifiers or live configuration</span>
+  </div>
+</footer>
+
+<script>
+  // Live/static probe: with no okey serve behind the page, the numbers links
+  // would 404 — stand them down and show the hint instead.
+  fetch('../api/ping').then(function (r) {
+    document.body.classList.add(r.ok ? 'live' : 'static-mode');
+  }).catch(function () { document.body.classList.add('static-mode'); });
+
+  // Scroll-spy: light up the section the reader is in.
+  (function () {
+    var links = {};
+    document.querySelectorAll('.side a[href^="#"]').forEach(function (a) {
+      links[a.getAttribute('href').slice(1)] = a;
+    });
+    var current = null;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting && links[e.target.id]) {
+          if (current) current.classList.remove('on');
+          current = links[e.target.id];
+          current.classList.add('on');
+        }
+      });
+    }, { rootMargin: '-60px 0px -70% 0px' });
+    document.querySelectorAll('.doc h2[id]').forEach(function (h) { io.observe(h); });
+  })();
+</script>
+</body>
+</html>
