@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Systems console — Ophelia's Key</title>
+<meta name="description" content="Live systems console for Ophelia's Key: power, broadcast chain, vision, audio and the Producer — drawn as animated schematics. Architecture only; no addresses or identifiers.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050a12'/%3E%3Cpath d='M4 21h20l4-6H6z' fill='none' stroke='%234fe3ff' stroke-width='1.6'/%3E%3Ccircle cx='16' cy='10' r='2.4' fill='%23ffb347'/%3E%3Cpath d='M2 25h28' stroke='%234fe3ff' stroke-opacity='.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #050a12; --surface: #0b1420; --surface-2: #0f1b2b;
+    --line: #17263a; --line-2: #1f3249;
+    --ink: #dbe8f5; --ink-2: #a9bbcf; --dim: #7f95ad; --mute: #4d6178;
+    --holo: #4fe3ff; --holo-soft: rgba(79,227,255,.14); --holo-line: rgba(79,227,255,.55);
+    --warm: #ffb347; --good: #56d9a3; --bad: #ff6b6b;
+    --display: "Chakra Petch", "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 15px/1.62 var(--sans); -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(1100px 500px at 50% -10%, rgba(79,227,255,.06), transparent 60%),
+      linear-gradient(rgba(79,227,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,227,255,.03) 1px, transparent 1px);
+    background-size: auto, 48px 48px, 48px 48px;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px);
+    mix-blend-mode: screen;
+  }
+  a { color: var(--holo); text-decoration: none; } a:hover { text-decoration: underline; }
+
+  /* ---------- top bar ---------- */
+  .mast { position: sticky; top: 0; z-index: 40; background: rgba(5,10,18,.92);
+          backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+  .mast-in { max-width: 1180px; margin: 0 auto; padding: 13px 22px;
+             display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap; }
+  .eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+             color: var(--dim); display: flex; gap: 14px; flex-wrap: wrap; }
+  .eyebrow b { color: var(--holo); font-weight: 500; }
+  .eyebrow a { color: inherit; } .eyebrow a:hover { color: var(--holo); text-decoration: none; }
+  .topnav { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--mono);
+          letter-spacing: .08em; text-transform: uppercase; padding: 6px 9px;
+          border: 1px solid var(--line-2); color: var(--ink-2); background: var(--surface); }
+  a.chip:hover { text-decoration: none; border-color: var(--holo-line); color: var(--holo); }
+  .chip.here { border-color: var(--holo-line); color: var(--holo); }
+
+  /* ---------- layout ---------- */
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 30px 22px 80px; }
+  section { margin: 0 0 46px; }
+  .ph { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+        border-bottom: 1px solid var(--line); padding-bottom: 9px; margin-bottom: 18px; }
+  .ph h2 { margin: 0; font: 700 20px/1.2 var(--display); letter-spacing: .03em;
+           text-transform: uppercase; }
+  .ph h2::before { content: "// "; color: var(--holo); }
+  .ph .note { font: 400 12.5px/1.5 var(--sans); color: var(--dim); }
+  h2[id] { scroll-margin-top: 74px; }
+  p { margin: 0 0 12px; max-width: 78ch; color: var(--ink-2); }
+  p strong { color: var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero h1 { margin: 0 0 10px; font: 700 clamp(28px, 5vw, 46px)/1.03 var(--display);
+             letter-spacing: .01em; text-transform: uppercase; }
+  .hero h1 span { color: var(--holo); text-shadow: 0 0 20px rgba(79,227,255,.4); }
+  .hero .lede { max-width: 74ch; }
+
+  .vitals { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 22px 0 0; }
+  .vital { background: var(--surface); padding: 14px 16px; }
+  .vital b { display: block; font: 700 clamp(19px, 2.6vw, 26px)/1.1 var(--display);
+             color: var(--holo); letter-spacing: .01em; }
+  .vital span { display: block; margin-top: 5px; font: 500 10px/1.3 var(--mono);
+                letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+
+  /* ---------- schematic frame ---------- */
+  .stage { position: relative; border: 1px solid var(--line); background:
+           linear-gradient(180deg, rgba(11,20,32,.9), rgba(5,10,18,.9)); overflow: hidden; }
+  .stage svg { display: block; width: 100%; height: auto; }
+  .sx { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+  @media (max-width: 900px) { .sx svg { min-width: 860px; } }
+  .sweep { position: absolute; inset: 0; pointer-events: none;
+           background: linear-gradient(180deg, transparent, rgba(79,227,255,.05) 45%, transparent);
+           animation: sweep 7s linear infinite; }
+  @keyframes sweep { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 11px 16px;
+            border-top: 1px solid var(--line); background: var(--surface);
+            font: 500 10.5px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+            color: var(--dim); }
+  .legend i { display: inline-block; width: 9px; height: 9px; margin-right: 7px;
+              vertical-align: baseline; border-radius: 50%; }
+  .legend .c { background: var(--holo); box-shadow: 0 0 8px var(--holo); }
+  .legend .w { background: var(--warm); box-shadow: 0 0 8px var(--warm); }
+  .legend .g { background: var(--good); box-shadow: 0 0 8px var(--good); }
+
+  svg text { font-family: var(--mono); }
+  .lbl { font-size: 10px; letter-spacing: .09em; fill: var(--holo); fill-opacity: .9; }
+  .lbl-2 { font-size: 9px; letter-spacing: .06em; fill: #a9bbcf; fill-opacity: .75; }
+  .big { font-family: "Chakra Petch", sans-serif; font-size: 15px; font-weight: 700;
+         letter-spacing: .02em; fill: #dbe8f5; }
+
+  /* ---------- cards ---------- */
+  .grid { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line);
+          grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); }
+  .card { background: var(--surface); padding: 16px 18px 18px; }
+  .card h3 { margin: 0 0 3px; font: 600 14px/1.3 var(--display); letter-spacing: .05em;
+             text-transform: uppercase; color: var(--ink); }
+  .card .loc { display: block; margin-bottom: 11px; font: 500 9.5px/1.3 var(--mono);
+               letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  .card dl { margin: 0; display: grid; grid-template-columns: auto; gap: 9px; }
+  .card dt { font: 500 10px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+             color: var(--holo); fill-opacity: .8; }
+  .card dd { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+  .card .why { margin: 12px 0 0; padding-top: 11px; border-top: 1px solid var(--line);
+               font-size: 12.5px; color: var(--dim); }
+
+  .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 18px; }
+  .kv div { background: var(--surface); padding: 12px 15px; }
+  .kv dt { font: 500 10px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+           color: var(--dim); margin-bottom: 4px; }
+  .kv dd { margin: 0; font: 600 14px/1.35 var(--display); letter-spacing: .02em; color: var(--ink); }
+  .kv dd em { font-style: normal; color: var(--holo); }
+
+  blockquote { margin: 18px 0 0; padding: 13px 17px; border-left: 2px solid var(--holo-line);
+               background: var(--surface); }
+  blockquote p { margin: 0; }
+  blockquote.warn { border-left-color: var(--warm); }
+  blockquote.warn strong { color: var(--warm); }
+
+  ul { margin: 0 0 14px; padding-left: 22px; } li { margin-bottom: 6px; color: var(--ink-2); }
+  code { font: 12.5px var(--mono); background: var(--surface-2); border: 1px solid var(--line);
+         padding: 1px 6px; border-radius: 3px; color: var(--ink-2); }
+
+  .assume { margin-top: 20px; border: 1px solid var(--line); background: var(--surface); }
+  .assume summary { cursor: pointer; padding: 11px 16px; font: 500 10.5px/1 var(--mono);
+                    letter-spacing: .14em; text-transform: uppercase; color: var(--warm); }
+  .assume[open] summary { border-bottom: 1px solid var(--line); }
+  .assume .in { padding: 14px 16px 4px; }
+  .assume table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .assume th, .assume td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line);
+                           vertical-align: top; color: var(--ink-2); }
+  .assume th { font: 500 10px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+               color: var(--mute); }
+  .assume td:first-child { font-family: var(--mono); color: var(--holo); white-space: nowrap; }
+
+  footer { border-top: 1px solid var(--line); background: var(--surface); }
+  .foot { max-width: 1180px; margin: 0 auto; padding: 20px 22px 30px; display: flex;
+          justify-content: space-between; gap: 12px 30px; flex-wrap: wrap;
+          font: 500 10.5px/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+          color: var(--mute); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sweep { animation: none; }
+    svg animate, svg animateMotion, svg animateTransform { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="mast-in">
+    <div class="eyebrow">
+      <span><a href="https://p5yc0dr3am3r.github.io/OpheliasKey/"><b>OPHELIA'S KEY</b></a></span>
+      <span>SYSTEMS&nbsp;CONSOLE</span>
+    </div>
+    <nav class="topnav">
+      <a class="chip" href="https://p5yc0dr3am3r.github.io/OpheliasKey/">Home</a>
+      <a class="chip" href="https://p5yc0dr3am3r.github.io/OpheliasKey/manual/">The manual</a>
+      <a class="chip" href="https://p5yc0dr3am3r.github.io/OpheliasKey/manual/systems.html">Systems&nbsp;(manual)</a>
+      <a class="chip here" href="./">Console</a>
+      <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <h1>Systems <span>console</span></h1>
+    <p class="lede">Ophelia's Key as a set of running systems: what generates the power, what
+      carries the show off the boat, and what the Producer does with the cameras once it is
+      live. Every schematic on this page is drawn from the same specification the
+      <a href="https://p5yc0dr3am3r.github.io/OpheliasKey/manual/systems.html">manual</a> documents in prose.
+      Architecture only — no addresses, hardware identifiers or live configuration.</p>
+
+    <div class="vitals">
+      <div class="vital"><b>4,000 W</b><span>Solar array</span></div>
+      <div class="vital"><b>19.5 kWh</b><span>Storage, nameplate</span></div>
+      <div class="vital"><b>6 + 1</b><span>Camera angles</span></div>
+      <div class="vital"><b>Stereo</b><span>Onboard capture</span></div>
+      <div class="vital"><b>Producer</b><span>Directing live</span></div>
+    </div>
+  </section>
+
+  <!-- ================= THE VESSEL ================= -->
+  <section aria-labelledby="h-boat">
+    <div class="ph"><h2 id="h-boat">The boat, bow to lazarette</h2>
+      <span class="note">Where each system physically sits. Markers are keyed to the strip below.</span></div>
+
+    <div class="stage">
+      <div class="sx">
+      <svg viewBox="0 0 1200 430" role="img"
+           aria-label="Schematic profile of Ophelia's Key, port side, bow to the right: solar array and Starlink on the hardtop, radar arch with the master camera, pan-tilt cameras fore and aft, a roaming handheld camera on the deck, and the battery banks in the lazarette.">
+        <defs>
+          <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.2" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <linearGradient id="refl" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#4fe3ff" stop-opacity=".28"/>
+            <stop offset="1" stop-color="#4fe3ff" stop-opacity="0"/>
+          </linearGradient>
+          <mask id="reflMask"><rect x="0" y="0" width="1200" height="430" fill="url(#refl)"/></mask>
+        </defs>
+
+        <!-- perspective floor -->
+        <g opacity=".9">
+          <line x1="0" y1="336" x2="1200" y2="336" stroke="#4fe3ff" stroke-opacity=".55"/>
+          <line x1="0" y1="352" x2="1200" y2="352" stroke="#4fe3ff" stroke-opacity=".22"/>
+          <line x1="0" y1="372" x2="1200" y2="372" stroke="#4fe3ff" stroke-opacity=".14"/>
+          <line x1="0" y1="398" x2="1200" y2="398" stroke="#4fe3ff" stroke-opacity=".09"/>
+          <line x1="600" y1="336" x2="600" y2="430" stroke="#4fe3ff" stroke-opacity=".10"/>
+          <line x1="420" y1="336" x2="300" y2="430" stroke="#4fe3ff" stroke-opacity=".10"/>
+          <line x1="780" y1="336" x2="900" y2="430" stroke="#4fe3ff" stroke-opacity=".10"/>
+          <line x1="240" y1="336" x2="0" y2="430" stroke="#4fe3ff" stroke-opacity=".10"/>
+          <line x1="960" y1="336" x2="1200" y2="430" stroke="#4fe3ff" stroke-opacity=".10"/>
+        </g>
+
+        <!-- the vessel: port profile, bow to the right -->
+        <g id="boat" transform="translate(180,0)" fill="none" stroke="#4fe3ff"
+           stroke-width="1.4" stroke-linejoin="round" filter="url(#glow)">
+          <path d="M82,334 L592,334 C628,326 640,292 640,252 C460,254 250,264 84,272 Z"
+                fill="rgba(79,227,255,.05)"/>
+          <path d="M84,272 C250,264 460,254 640,252" stroke-opacity=".5"/>
+          <path d="M110,322 L560,322" stroke-opacity=".25"/>
+          <!-- foredeck, windshield, hardtop -->
+          <path d="M500,254 L470,224 L340,224 L292,262"/>
+          <path d="M258,212 L492,212 L500,254"/>
+          <path d="M258,212 L252,262"/>
+          <path d="M300,212 L300,262 M380,212 L376,260 M460,212 L462,258" stroke-opacity=".35"/>
+          <!-- radar arch and dome -->
+          <path d="M176,268 L190,196 L232,196 L244,266"/>
+          <ellipse cx="211" cy="192" rx="16" ry="5"/>
+          <!-- solar array across the hardtop -->
+          <g stroke-width="1.2">
+            <path d="M264,210 L394,204 L394,196 L264,202 Z" fill="rgba(79,227,255,.12)"/>
+            <path d="M290,201 L290,209 M316,200 L316,208 M342,199 L342,207 M368,198 L368,206"
+                  stroke-opacity=".45"/>
+          </g>
+          <!-- Starlink on the hardtop -->
+          <path d="M410,211 L404,200 L444,194 L450,205 Z" fill="rgba(79,227,255,.18)"/>
+          <!-- cockpit, swim platform, seats -->
+          <path d="M84,272 L64,280 L64,334 L82,334" stroke-opacity=".6"/>
+          <path d="M120,262 L120,250 L160,250 L160,262 M196,262 L196,248 L240,248 L240,262"
+                stroke-opacity=".5"/>
+          <!-- lazarette: the battery compartment -->
+          <g stroke-opacity=".5" stroke-width="1.1">
+            <path d="M96,300 L168,300 L168,326 L96,326 Z" fill="rgba(79,227,255,.07)"/>
+            <path d="M120,300 L120,326 M144,300 L144,326" stroke-opacity=".3"/>
+          </g>
+          <!-- waterline -->
+          <path d="M-180,338 L1020,338" stroke-opacity=".5" stroke-dasharray="6 10">
+            <animate attributeName="stroke-dashoffset" from="0" to="-160" dur="9s" repeatCount="indefinite"/>
+          </path>
+        </g>
+
+        <!-- reflection -->
+        <g mask="url(#reflMask)" opacity=".8">
+          <use href="#boat" transform="translate(0,676) scale(1,-1)"/>
+        </g>
+
+        <!-- sun and the solar harvest -->
+        <g filter="url(#glow)">
+          <circle cx="150" cy="74" r="17" fill="none" stroke="#ffb347" stroke-opacity=".8"/>
+          <g stroke="#ffb347" stroke-opacity=".45" stroke-width="1.1">
+            <path d="M150,44 L150,34 M150,114 L150,124 M120,74 L110,74 M180,74 L190,74
+                     M129,53 L122,46 M171,95 L178,102 M171,53 L178,46 M129,95 L122,102">
+              <animateTransform attributeName="transform" type="rotate" from="0 150 74"
+                                to="360 150 74" dur="60s" repeatCount="indefinite"/>
+            </path>
+          </g>
+          <text class="lbl" x="150" y="140" text-anchor="middle" fill="#ffb347">4.5 PEAK SUN HOURS</text>
+        </g>
+        <path id="rayPath" fill="none" stroke="#ffb347" stroke-opacity=".22" stroke-width="1"
+              d="M168,90 C260,120 380,160 500,196"/>
+        <g filter="url(#glow2)">
+          <circle r="2.6" fill="#ffb347"><animateMotion dur="3.2s" repeatCount="indefinite"><mpath href="#rayPath"/></animateMotion></circle>
+          <circle r="2.6" fill="#ffb347"><animateMotion dur="3.2s" begin="-1.07s" repeatCount="indefinite"><mpath href="#rayPath"/></animateMotion></circle>
+          <circle r="2.6" fill="#ffb347"><animateMotion dur="3.2s" begin="-2.13s" repeatCount="indefinite"><mpath href="#rayPath"/></animateMotion></circle>
+        </g>
+
+        <!-- Starlink uplink -->
+        <path id="upPath" fill="none" stroke="#4fe3ff" stroke-opacity=".22" stroke-width="1"
+              d="M612,192 C700,150 820,104 980,66"/>
+        <g filter="url(#glow2)">
+          <circle r="2.8" fill="#4fe3ff"><animateMotion dur="2.6s" repeatCount="indefinite"><mpath href="#upPath"/></animateMotion></circle>
+          <circle r="2.8" fill="#4fe3ff"><animateMotion dur="2.6s" begin="-1.3s" repeatCount="indefinite"><mpath href="#upPath"/></animateMotion></circle>
+        </g>
+        <text class="lbl" x="990" y="62">UPLINK · YOUTUBE · TWITCH</text>
+
+        <!-- fixed pan-tilt cameras -->
+        <g fill="#4fe3ff" filter="url(#glow)">
+          <circle cx="391" cy="186" r="4"><animate attributeName="r" values="4;6;4" dur="2.6s" repeatCount="indefinite"/></circle>
+          <circle cx="322" cy="246" r="4"><animate attributeName="r" values="4;6;4" dur="2.9s" repeatCount="indefinite"/></circle>
+          <circle cx="400" cy="244" r="4"><animate attributeName="r" values="4;6;4" dur="3.2s" repeatCount="indefinite"/></circle>
+          <circle cx="470" cy="218" r="4"><animate attributeName="r" values="4;6;4" dur="2.4s" repeatCount="indefinite"/></circle>
+          <circle cx="760" cy="250" r="4"><animate attributeName="r" values="4;6;4" dur="3.5s" repeatCount="indefinite"/></circle>
+          <circle cx="268" cy="274" r="4"><animate attributeName="r" values="4;6;4" dur="2.2s" repeatCount="indefinite"/></circle>
+        </g>
+
+        <!-- the handheld: Continuity Camera, walking the deck -->
+        <path id="handPath" fill="none" stroke="#ffb347" stroke-opacity=".18" stroke-width="1"
+              stroke-dasharray="3 5" d="M262,286 C300,268 350,258 420,252 C470,248 520,244 560,242"/>
+        <g filter="url(#glow2)">
+          <g>
+            <circle r="5" fill="none" stroke="#ffb347" stroke-width="1.4"/>
+            <circle r="2" fill="#ffb347"/>
+            <animateMotion dur="14s" repeatCount="indefinite" keyPoints="0;1;0"
+                           keyTimes="0;0.5;1" calcMode="linear">
+              <mpath href="#handPath"/>
+            </animateMotion>
+          </g>
+        </g>
+
+        <!-- numbered callouts -->
+        <g class="mk" fill="none" stroke="#4fe3ff" stroke-width="1.2">
+          <g><circle cx="509" cy="176" r="9" fill="rgba(5,10,18,.9)"/><text class="lbl" x="509" y="180" text-anchor="middle" stroke="none" fill="#4fe3ff">1</text><path d="M509,185 L509,196" stroke-opacity=".5"/></g>
+          <g><circle cx="607" cy="170" r="9" fill="rgba(5,10,18,.9)"/><text class="lbl" x="607" y="174" text-anchor="middle" stroke="none" fill="#4fe3ff">2</text><path d="M607,179 L607,193" stroke-opacity=".5"/></g>
+          <g><circle cx="345" cy="164" r="9" fill="rgba(5,10,18,.9)"/><text class="lbl" x="345" y="168" text-anchor="middle" stroke="none" fill="#4fe3ff">3</text><path d="M352,170 L386,184" stroke-opacity=".5"/></g>
+          <g><circle cx="700" cy="206" r="9" fill="rgba(5,10,18,.9)"/><text class="lbl" x="700" y="210" text-anchor="middle" stroke="none" fill="#4fe3ff">4</text><path d="M694,213 L668,230" stroke-opacity=".5"/></g>
+          <g><circle cx="212" cy="318" r="9" fill="rgba(5,10,18,.9)"/><text class="lbl" x="212" y="322" text-anchor="middle" stroke="none" fill="#4fe3ff">5</text><path d="M221,318 L272,318" stroke-opacity=".5"/></g>
+          <g><circle cx="430" cy="300" r="9" fill="rgba(5,10,18,.9)"/><text class="lbl" x="430" y="304" text-anchor="middle" stroke="none" fill="#4fe3ff">6</text><path d="M424,294 L392,262" stroke-opacity=".5"/></g>
+        </g>
+      </svg>
+      </div>
+      <div class="sweep" aria-hidden="true"></div>
+      <div class="legend">
+        <span><i class="c"></i>Fixed pan-tilt camera</span>
+        <span><i class="w"></i>Handheld · Continuity Camera</span>
+        <span><i class="w"></i>Harvest</span>
+        <span><i class="c"></i>Uplink</span>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:18px">
+      <div class="card"><h3>1 · Solar array</h3><span class="loc">Hardtop</span>
+        <p style="margin:0">4,000 W of flexible panel across the hardtop, wired four in series and
+          two strings in parallel into a single MPPT controller.</p></div>
+      <div class="card"><h3>2 · Starlink</h3><span class="loc">Hardtop, aft of the array</span>
+        <p style="margin:0">Roam service. The only uplink; the whole broadcast budget is sized
+          against its upload, not its download.</p></div>
+      <div class="card"><h3>3 · Radar arch</h3><span class="loc">Above the cockpit</span>
+        <p style="margin:0">Broadband radar dome, and the elevated master camera that holds the
+          wide shot the Producer cuts back to.</p></div>
+      <div class="card"><h3>4 · Helm and nav</h3><span class="loc">Windshield station</span>
+        <p style="margin:0">Multifunction display, depth, heading and autopilot on one NMEA 2000
+          backbone. Read-only to everything downstream.</p></div>
+      <div class="card"><h3>5 · Battery banks</h3><span class="loc">Lazarette</span>
+        <p style="margin:0">Two banks on one 25.6 V chassis: a large bank behind the inverter for
+          AC, a separate bank reserved for DC house loads.</p></div>
+      <div class="card"><h3>6 · Stage and handheld</h3><span class="loc">Cockpit deck</span>
+        <p style="margin:0">The sheltered stage. The handheld walks it — a phone on Continuity
+          Camera, treated as one more angle the Producer can cut to.</p></div>
+    </div>
+  </section>
+
+  <!-- ================= POWER ================= -->
+  <section aria-labelledby="h-power">
+    <div class="ph"><h2 id="h-power">Power</h2>
+      <span class="note">Two banks on one 25.6 V chassis. Charge runs left to right; loads hang off the right.</span></div>
+
+    <div class="stage">
+      <div class="sx">
+      <svg viewBox="0 0 1200 400" role="img"
+           aria-label="Power flow: a 4,000 watt solar array and an 8,000 watt generator charge a 25.6 volt chassis through an MPPT controller. The chassis feeds a 1,200 amp-hour AC bank into a 4,000 watt inverter and the 120 volt loads, and a separate 320 amp-hour bank for the DC house loads.">
+        <defs>
+          <filter id="pglow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="3" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4fe3ff" fill-opacity=".6"/>
+          </marker>
+        </defs>
+
+        <!-- ---- generation ---- -->
+        <g fill="rgba(15,27,43,.9)" stroke="#ffb347" stroke-opacity=".7" stroke-width="1.2">
+          <rect x="24" y="62" width="182" height="76"/>
+          <rect x="24" y="250" width="182" height="76"/>
+        </g>
+        <text class="big" x="115" y="94" text-anchor="middle" fill="#ffb347">4,000 W</text>
+        <text class="lbl" x="115" y="112" text-anchor="middle" fill="#ffb347">SOLAR ARRAY</text>
+        <text class="lbl-2" x="115" y="128" text-anchor="middle">8 × 500 W FLEXIBLE</text>
+        <text class="big" x="115" y="282" text-anchor="middle" fill="#ffb347">8,000 W</text>
+        <text class="lbl" x="115" y="300" text-anchor="middle" fill="#ffb347">GENERATOR</text>
+        <text class="lbl-2" x="115" y="316" text-anchor="middle">HEAVY AC · FAST RECHARGE</text>
+
+        <!-- ---- mppt ---- -->
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".55" stroke-width="1.2">
+          <rect x="266" y="62" width="152" height="76"/>
+        </g>
+        <text class="big" x="342" y="94" text-anchor="middle">MPPT</text>
+        <text class="lbl-2" x="342" y="112" text-anchor="middle">140 A · 55–350 V IN</text>
+        <text class="lbl-2" x="342" y="127" text-anchor="middle">4S × 2P STRINGS</text>
+
+        <!-- ---- charge paths ---- -->
+        <path id="p1" fill="none" stroke="#ffb347" stroke-opacity=".35" stroke-width="1.2"
+              marker-end="url(#ar)" d="M206,100 L262,100"/>
+        <path id="p2" fill="none" stroke="#ffb347" stroke-opacity=".35" stroke-width="1.2"
+              marker-end="url(#ar)" d="M418,100 L494,100 L494,196"/>
+        <path id="p3" fill="none" stroke="#ffb347" stroke-opacity=".35" stroke-width="1.2"
+              marker-end="url(#ar)" d="M206,288 L400,288 L400,204 L490,204"/>
+        <g filter="url(#pglow)">
+          <circle r="3" fill="#ffb347"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#p1"/></animateMotion></circle>
+          <circle r="3" fill="#ffb347"><animateMotion dur="3.4s" repeatCount="indefinite"><mpath href="#p2"/></animateMotion></circle>
+          <circle r="3" fill="#ffb347"><animateMotion dur="3.4s" begin="-1.7s" repeatCount="indefinite"><mpath href="#p2"/></animateMotion></circle>
+          <circle r="3" fill="#ffb347" opacity=".55"><animateMotion dur="4.2s" repeatCount="indefinite"><mpath href="#p3"/></animateMotion></circle>
+        </g>
+
+        <!-- ---- the 25.6 V chassis ---- -->
+        <path d="M494,54 L494,346" stroke="#4fe3ff" stroke-opacity=".7" stroke-width="3"/>
+        <text class="lbl" x="500" y="46">25.6 V CHASSIS</text>
+
+        <!-- ---- AC bank ---- -->
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".55" stroke-width="1.2">
+          <rect x="556" y="48" width="196" height="96"/>
+        </g>
+        <text class="big" x="654" y="80" text-anchor="middle">AC BANK</text>
+        <text class="lbl" x="654" y="99" text-anchor="middle">2 × 600 Ah · 15.4 kWh</text>
+        <text class="lbl-2" x="654" y="116" text-anchor="middle">LiFePO₄ · 2S AT 25.6 V</text>
+        <text class="lbl-2" x="654" y="132" text-anchor="middle">13.8 kWh USABLE AT 90%</text>
+        <path fill="none" stroke="#4fe3ff" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar)" d="M494,96 L552,96"/>
+
+        <!-- ---- DC-DC charger: the two banks are isolated ---- -->
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".45" stroke-width="1.2"
+           stroke-dasharray="4 3">
+          <rect x="540" y="266" width="132" height="68"/>
+        </g>
+        <text class="lbl" x="606" y="294" text-anchor="middle">DC–DC</text>
+        <text class="lbl-2" x="606" y="311" text-anchor="middle">25.6 V → 12.8 V</text>
+        <text class="lbl-2" x="606" y="326" text-anchor="middle" fill="#ffb347">UNCONFIRMED</text>
+        <path fill="none" stroke="#4fe3ff" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar)" d="M494,300 L536,300"/>
+
+        <!-- ---- DC bank ---- -->
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".55" stroke-width="1.2">
+          <rect x="716" y="252" width="196" height="96"/>
+        </g>
+        <text class="big" x="814" y="284" text-anchor="middle">DC BANK</text>
+        <text class="lbl" x="814" y="303" text-anchor="middle">12.8 V · 320 Ah · 4.1 kWh</text>
+        <text class="lbl-2" x="814" y="320" text-anchor="middle">RESERVED FOR HOUSE DC</text>
+        <text class="lbl-2" x="814" y="336" text-anchor="middle">3.7 kWh USABLE AT 90%</text>
+        <path fill="none" stroke="#4fe3ff" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar)" d="M672,300 L712,300"/>
+
+        <!-- ---- inverter ---- -->
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".55" stroke-width="1.2">
+          <rect x="812" y="48" width="176" height="96"/>
+        </g>
+        <text class="big" x="900" y="82" text-anchor="middle">INVERTER</text>
+        <text class="lbl" x="900" y="101" text-anchor="middle">4,000 W · 120 V</text>
+        <text class="lbl-2" x="900" y="118" text-anchor="middle">33 A CONTINUOUS</text>
+        <text class="lbl-2" x="900" y="134" text-anchor="middle">≈90% EFFICIENT</text>
+
+        <path id="p4" fill="none" stroke="#4fe3ff" stroke-opacity=".4" stroke-width="1.3" marker-end="url(#ar)" d="M752,96 L808,96"/>
+        <path id="p5" fill="none" stroke="#4fe3ff" stroke-opacity=".4" stroke-width="1.3" marker-end="url(#ar)" d="M988,96 L1044,96"/>
+        <path id="p6" fill="none" stroke="#4fe3ff" stroke-opacity=".4" stroke-width="1.3" marker-end="url(#ar)" d="M912,300 L1044,300"/>
+        <g filter="url(#pglow)">
+          <circle r="3" fill="#4fe3ff"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#p4"/></animateMotion></circle>
+          <circle r="3" fill="#4fe3ff"><animateMotion dur="1.4s" begin="-.7s" repeatCount="indefinite"><mpath href="#p5"/></animateMotion></circle>
+          <circle r="3" fill="#4fe3ff"><animateMotion dur="3.6s" repeatCount="indefinite"><mpath href="#p6"/></animateMotion></circle>
+          <circle r="3" fill="#4fe3ff"><animateMotion dur="3.6s" begin="-1.8s" repeatCount="indefinite"><mpath href="#p6"/></animateMotion></circle>
+        </g>
+
+        <!-- ---- loads ---- -->
+        <g fill="rgba(15,27,43,.9)" stroke="#56d9a3" stroke-opacity=".5" stroke-width="1.2">
+          <rect x="1048" y="48" width="128" height="96"/>
+          <rect x="1048" y="252" width="128" height="96"/>
+        </g>
+        <text class="lbl" x="1112" y="76" text-anchor="middle" fill="#56d9a3">120 V AC</text>
+        <text class="lbl-2" x="1112" y="94" text-anchor="middle">GALLEY · TOOLS</text>
+        <text class="lbl-2" x="1112" y="109" text-anchor="middle">DIVE CHARGERS</text>
+        <text class="lbl-2" x="1112" y="124" text-anchor="middle">STUDIO GEAR</text>
+        <text class="lbl" x="1112" y="282" text-anchor="middle" fill="#56d9a3">HOUSE DC</text>
+        <text class="lbl-2" x="1112" y="300" text-anchor="middle">LIGHTING · PUMPS</text>
+        <text class="lbl-2" x="1112" y="315" text-anchor="middle">NAV · N2K BUS</text>
+        <text class="lbl-2" x="1112" y="330" text-anchor="middle">NVR · NETWORK</text>
+      </svg>
+      </div>
+      <div class="sweep" aria-hidden="true"></div>
+      <div class="legend">
+        <span><i class="w"></i>Charge</span>
+        <span><i class="c"></i>Distribution</span>
+        <span><i class="g"></i>Load</span>
+      </div>
+    </div>
+
+    <dl class="kv">
+      <div><dt>Array, nameplate</dt><dd>4,000 W</dd></div>
+      <div><dt>Harvest, realistic</dt><dd><em>9.0–11.7 kWh</em> / day</dd></div>
+      <div><dt>Storage, nameplate</dt><dd>19.5 kWh</dd></div>
+      <div><dt>Storage, usable</dt><dd><em>17.5 kWh</em> at 90%</dd></div>
+      <div><dt>Inverter ceiling</dt><dd>4,000 W continuous</dd></div>
+      <div><dt>A 2-hour show draws</dt><dd><em>≈0.81 kWh</em></dd></div>
+      <div><dt>Shows on a full AC bank</dt><dd><em>≈17</em> back to back</dd></div>
+      <div><dt>Charge controller</dt><dd>140 A MPPT</dd></div>
+    </dl>
+
+    <blockquote class="warn"><p><strong>The DC bank's charging path is not confirmed.</strong>
+      Isolating the house bank from the inverter bank is a sound design, but the isolated side
+      still needs a way in — a DC-DC charger off the main chassis, its own controller, or an
+      alternator feed. The specification names 25.6 V charging equipment only, so the dashed link
+      above is what the design requires, not what is known to be fitted.</p></blockquote>
+
+    <blockquote><p><strong>The array now outruns the show.</strong> A two-hour broadcast — encoder,
+      interface, Starlink, cameras, lighting and monitoring — draws about 366 W, or 0.81 kWh at
+      the bank. Even a poor solar day covers that a dozen times over, which is what 4,000 W bought:
+      the generator stops being part of the broadcast plan and goes back to being a backup.</p></blockquote>
+
+    <details class="assume">
+      <summary>Assumptions behind these numbers</summary>
+      <div class="in">
+        <table>
+          <tr><th>Value</th><th>Assumption</th></tr>
+          <tr><td>4.5 h</td><td>Daily peak-sun-hour equivalent; varies by latitude and season</td></tr>
+          <tr><td>50–65%</td><td>Flexible panels commonly deliver well under nameplate; the harvest range above is the whole array derated across that band</td></tr>
+          <tr><td>90%</td><td>Practical usable fraction of LiFePO₄ capacity before BMS cutoff</td></tr>
+          <tr><td>90%</td><td>Pure-sine inverter efficiency at moderate load</td></tr>
+          <tr><td>2.0 h</td><td>A livestream set: setup, the show and the encore</td></tr>
+        </table>
+        <p style="font-size:12.5px;color:var(--dim)">Every figure here is an estimate from stated
+          specification, not a measurement. The same assumptions drive
+          <code>okey spec</code> and the studio model, so a number you disagree with can be changed
+          in one place.</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ================= BROADCAST CHAIN ================= -->
+  <section aria-labelledby="h-chain">
+    <div class="ph"><h2 id="h-chain">The broadcast chain</h2>
+      <span class="note">Seven angles and a stereo pair go in. One directed stream comes out.</span></div>
+
+    <p>Before the Producer, switching was manual: one operator, one angle at a time, and the wide
+      shot whenever nobody was free to cut. The Producer sits between the sources and the encoder
+      and makes that decision continuously — which is what turns six fixed cameras and a phone into
+      something that reads as a multi-camera broadcast rather than a webcam pointed at a boat.</p>
+
+    <div class="stage">
+      <div class="sx">
+      <svg viewBox="0 0 1200 440" role="img"
+           aria-label="Broadcast chain: six pan-tilt cameras, a handheld Continuity Camera, a stereo microphone pair and the audio interface feed the Producer, which selects, frames and colour-corrects the shot. Deckner supplies vessel telemetry. The Producer drives OBS, which composites the Lyric Show overlay and encodes to Starlink and the platforms.">
+        <defs>
+          <filter id="cglow" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="3" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4fe3ff" fill-opacity=".6"/>
+          </marker>
+        </defs>
+
+        <!-- ---- sources ---- -->
+        <text class="lbl" x="24" y="28" fill="#7f95ad">SOURCES</text>
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".5" stroke-width="1.2">
+          <rect x="24" y="40" width="196" height="86"/>
+        </g>
+        <text class="big" x="122" y="70" text-anchor="middle">6 × PTZ</text>
+        <text class="lbl-2" x="122" y="88" text-anchor="middle">5 MP · 300° PAN · 90° TILT</text>
+        <text class="lbl-2" x="122" y="104" text-anchor="middle">INWARD ×3 · OUTWARD ×3</text>
+        <text class="lbl-2" x="122" y="119" text-anchor="middle">POE FROM THE RECORDER</text>
+
+        <g fill="rgba(15,27,43,.9)" stroke="#ffb347" stroke-opacity=".55" stroke-width="1.2">
+          <rect x="24" y="144" width="196" height="76"/>
+        </g>
+        <text class="big" x="122" y="174" text-anchor="middle" fill="#ffb347">HANDHELD</text>
+        <text class="lbl-2" x="122" y="192" text-anchor="middle">CONTINUITY CAMERA</text>
+        <text class="lbl-2" x="122" y="208" text-anchor="middle">WIRELESS · WALKS THE STAGE</text>
+
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".5" stroke-width="1.2">
+          <rect x="24" y="238" width="196" height="76"/>
+          <rect x="24" y="332" width="196" height="68"/>
+        </g>
+        <text class="big" x="122" y="268" text-anchor="middle">STEREO PAIR</text>
+        <text class="lbl-2" x="122" y="286" text-anchor="middle">ROOM AND AUDIENCE</text>
+        <text class="lbl-2" x="122" y="302" text-anchor="middle">LEFT / RIGHT IMAGE</text>
+        <text class="lbl" x="122" y="360" text-anchor="middle">INTERFACE</text>
+        <text class="lbl-2" x="122" y="378" text-anchor="middle">VOCAL MIC + DI</text>
+        <text class="lbl-2" x="122" y="393" text-anchor="middle">24-BIT / 96 kHz</text>
+
+        <!-- ---- feeds into the producer ---- -->
+        <path id="f1" fill="none" stroke="#4fe3ff" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar2)" d="M220,83 C250,83 260,120 292,150"/>
+        <path id="f2" fill="none" stroke="#ffb347" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar2)" d="M220,182 C252,182 262,186 292,192"/>
+        <path id="f3" fill="none" stroke="#4fe3ff" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar2)" d="M220,276 C252,276 262,258 292,236"/>
+        <path id="f4" fill="none" stroke="#4fe3ff" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar2)" d="M220,366 C258,366 268,300 292,278"/>
+        <g filter="url(#cglow)">
+          <circle r="2.8" fill="#4fe3ff"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#f1"/></animateMotion></circle>
+          <circle r="2.8" fill="#4fe3ff"><animateMotion dur="2.2s" begin="-1.1s" repeatCount="indefinite"><mpath href="#f1"/></animateMotion></circle>
+          <circle r="2.8" fill="#ffb347"><animateMotion dur="2.6s" repeatCount="indefinite"><mpath href="#f2"/></animateMotion></circle>
+          <circle r="2.8" fill="#4fe3ff"><animateMotion dur="2.8s" repeatCount="indefinite"><mpath href="#f3"/></animateMotion></circle>
+          <circle r="2.8" fill="#4fe3ff"><animateMotion dur="3.1s" repeatCount="indefinite"><mpath href="#f4"/></animateMotion></circle>
+        </g>
+
+        <!-- ---- Deckner: telemetry from below ---- -->
+        <g fill="rgba(15,27,43,.9)" stroke="#56d9a3" stroke-opacity=".45" stroke-width="1.2">
+          <rect x="292" y="352" width="228" height="62"/>
+        </g>
+        <text class="lbl" x="406" y="376" text-anchor="middle" fill="#56d9a3">DECKNER · VESSEL AGENT</text>
+        <text class="lbl-2" x="406" y="394" text-anchor="middle">SUBSTREAMS · N2K TELEMETRY · SENSORS</text>
+        <text class="lbl-2" x="406" y="408" text-anchor="middle">READ-ONLY ON NAVIGATION</text>
+        <path id="f5" fill="none" stroke="#56d9a3" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar2)" d="M406,348 L406,326"/>
+        <g filter="url(#cglow)">
+          <circle r="2.8" fill="#56d9a3"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#f5"/></animateMotion></circle>
+        </g>
+
+        <!-- ---- THE PRODUCER ---- -->
+        <g fill="rgba(11,20,32,.95)" stroke="#4fe3ff" stroke-opacity=".85" stroke-width="1.8">
+          <rect x="292" y="60" width="228" height="262"/>
+        </g>
+        <rect x="292" y="60" width="228" height="34" fill="rgba(79,227,255,.14)" stroke="none"/>
+        <text class="big" x="406" y="84" text-anchor="middle" fill="#4fe3ff">THE PRODUCER</text>
+        <g class="lbl-2">
+          <text x="310" y="120">▸ TRACK — holds the frame</text>
+          <text x="310" y="142">▸ ZOOM — pushes in</text>
+          <text x="310" y="164">▸ SELECT — picks what is live</text>
+          <text x="310" y="186">▸ MOVE — pans between shots</text>
+          <text x="310" y="208">▸ GRADE — matches the cameras</text>
+          <text x="310" y="230">▸ OVERLAY — lower thirds</text>
+          <text x="310" y="252">▸ PACE — cuts before it stales</text>
+        </g>
+        <path d="M304,272 L508,272" stroke="#4fe3ff" stroke-opacity=".25"/>
+        <text class="lbl-2" x="406" y="292" text-anchor="middle">DIRECTS OVER LOCAL WEBSOCKET</text>
+        <text class="lbl-2" x="406" y="308" text-anchor="middle">NO AUTHORITY OUTSIDE THE STUDIO</text>
+
+        <!-- ---- OBS ---- -->
+        <path id="f6" fill="none" stroke="#4fe3ff" stroke-opacity=".45" stroke-width="1.5" marker-end="url(#ar2)" d="M520,180 L588,180"/>
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".55" stroke-width="1.2">
+          <rect x="592" y="126" width="180" height="110"/>
+        </g>
+        <text class="big" x="682" y="158" text-anchor="middle">OBS</text>
+        <text class="lbl-2" x="682" y="176" text-anchor="middle">SCENE COMPOSITE</text>
+        <text class="lbl-2" x="682" y="192" text-anchor="middle">CAPTIONS BURNED IN</text>
+        <text class="lbl-2" x="682" y="208" text-anchor="middle">BEFORE ENCODING</text>
+        <text class="lbl-2" x="682" y="224" text-anchor="middle">1080p60 · 6 Mbps</text>
+
+        <!-- Lyric Show overlay drops in from above -->
+        <g fill="rgba(15,27,43,.9)" stroke="#ffb347" stroke-opacity=".5" stroke-width="1.2">
+          <rect x="592" y="30" width="180" height="62"/>
+        </g>
+        <text class="lbl" x="682" y="54" text-anchor="middle" fill="#ffb347">LYRIC SHOW</text>
+        <text class="lbl-2" x="682" y="72" text-anchor="middle">CAPTIONS · TRANSLATION</text>
+        <text class="lbl-2" x="682" y="86" text-anchor="middle">BROWSER SOURCE</text>
+        <path id="f7" fill="none" stroke="#ffb347" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar2)" d="M682,92 L682,122"/>
+
+        <!-- ---- uplink and out ---- -->
+        <path id="f8" fill="none" stroke="#4fe3ff" stroke-opacity=".45" stroke-width="1.5" marker-end="url(#ar2)" d="M772,180 L836,180"/>
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".55" stroke-width="1.2">
+          <rect x="840" y="140" width="150" height="82"/>
+        </g>
+        <text class="big" x="915" y="170" text-anchor="middle">STARLINK</text>
+        <text class="lbl-2" x="915" y="188" text-anchor="middle">8–25 Mbps UP</text>
+        <text class="lbl-2" x="915" y="204" text-anchor="middle">×1.5 HEADROOM NEEDED</text>
+
+        <path id="f9" fill="none" stroke="#4fe3ff" stroke-opacity=".45" stroke-width="1.5" marker-end="url(#ar2)" d="M990,180 L1044,180"/>
+        <g fill="rgba(15,27,43,.9)" stroke="#56d9a3" stroke-opacity=".5" stroke-width="1.2">
+          <rect x="1048" y="132" width="128" height="98"/>
+        </g>
+        <text class="lbl" x="1112" y="160" text-anchor="middle" fill="#56d9a3">PLATFORMS</text>
+        <text class="lbl-2" x="1112" y="178" text-anchor="middle">YOUTUBE</text>
+        <text class="lbl-2" x="1112" y="193" text-anchor="middle">TWITCH</text>
+        <text class="lbl-2" x="1112" y="208" text-anchor="middle">KICK · FACEBOOK</text>
+        <text class="lbl-2" x="1112" y="223" text-anchor="middle">ONE RTMP STREAM</text>
+
+        <g filter="url(#cglow)">
+          <circle r="3.2" fill="#4fe3ff"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#f6"/></animateMotion></circle>
+          <circle r="2.8" fill="#ffb347"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#f7"/></animateMotion></circle>
+          <circle r="3.2" fill="#4fe3ff"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#f8"/></animateMotion></circle>
+          <circle r="3.2" fill="#4fe3ff"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#f9"/></animateMotion></circle>
+        </g>
+      </svg>
+      </div>
+      <div class="sweep" aria-hidden="true"></div>
+      <div class="legend">
+        <span><i class="c"></i>Video and control</span>
+        <span><i class="w"></i>Audio and overlay</span>
+        <span><i class="g"></i>Telemetry</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= THE PRODUCER ================= -->
+  <section aria-labelledby="h-producer">
+    <div class="ph"><h2 id="h-producer">The Producer</h2>
+      <span class="note">A directing layer above Deckner, not a replacement for it.</span></div>
+
+    <p>Deckner is the vessel's agent: it listens to the cameras' substreams, the NMEA bus and the
+      sensors, and it knows what is happening aboard. It has never been a director — it has no
+      opinion about which shot is interesting. <strong>The Producer is that opinion.</strong> It
+      takes Deckner's picture of the boat, adds its own read of the frame, and drives the studio.</p>
+
+    <p>The split matters for the same reason the rest of the boat is split: a bad call in the
+      directing layer should cost a dull cut, not a missed engine alarm. Deckner keeps running if
+      the Producer stops. The Producer has no path to the helm — it can only reach the studio.</p>
+
+    <div class="grid">
+      <div class="card"><h3>Framing</h3><span class="loc">Per source, continuously</span>
+        <dl>
+          <dt>Track</dt><dd>Follows the performer across the frame and drives the pan-tilt head to
+            keep them composed rather than centred.</dd>
+          <dt>Zoom</dt><dd>Pushes in for a solo or a held note and pulls back out before the shot
+            gets claustrophobic.</dd>
+        </dl></div>
+      <div class="card"><h3>Cutting</h3><span class="loc">Across all seven angles</span>
+        <dl>
+          <dt>Select</dt><dd>Chooses which camera is live — including the handheld, which is
+            treated as an angle rather than a special case.</dd>
+          <dt>Pace</dt><dd>Holds a shot long enough to read and cuts before it goes stale. Static
+            framing for minutes at a time is the thing that made the old stream feel like a
+            security feed.</dd>
+        </dl></div>
+      <div class="card"><h3>Look</h3><span class="loc">Applied before the encoder</span>
+        <dl>
+          <dt>Grade</dt><dd>Colour-corrects each source so six cameras from one budget batch and a
+            phone do not visibly disagree about what white is — the single biggest tell in a
+            multi-camera cut.</dd>
+          <dt>Overlay</dt><dd>Draws lower thirds and live ocean telemetry, composited with the
+            Lyric Show captions before encoding so nothing desyncs downstream.</dd>
+        </dl></div>
+    </div>
+
+    <blockquote class="warn"><p><strong>Boundaries.</strong> The Producer commands the studio over a
+      local socket and nothing else. It cannot reach the autopilot, the helm display or the
+      navigation bus — that path does not exist in its code, which is a structural guarantee rather
+      than a configuration setting. Deckner holds the same restriction independently.</p></blockquote>
+  </section>
+
+  <!-- ================= VISION ================= -->
+  <section aria-labelledby="h-vision">
+    <div class="ph"><h2 id="h-vision">Vision</h2>
+      <span class="note">Six fixed angles, one that walks.</span></div>
+
+    <div class="grid">
+      <div class="card"><h3>Fixed · pan-tilt</h3><span class="loc">Arch · cockpit · both rails</span>
+        <dl>
+          <dt>Elevated master</dt><dd>Under the radar mount. The wide shot everything cuts back
+            to.</dd>
+          <dt>Inward</dt><dd>Cockpit and performance coverage, port and starboard.</dd>
+          <dt>Outward</dt><dd>Waterline, dock approaches and the forward bow channel — security
+            when there is no show, establishing shots when there is.</dd>
+        </dl>
+        <p class="why">Six budget cameras on vendor firmware stay on the recorder's own PoE segment
+          rather than the segment carrying the studio and the firewall's admin interface.</p></div>
+
+      <div class="card"><h3>Handheld · Continuity Camera</h3><span class="loc">Wherever the show is</span>
+        <dl>
+          <dt>What it adds</dt><dd>A moving, close, human angle — walking the deck, out on the swim
+            platform, into the crowd on the dock. The fixed rig cannot do any of that.</dd>
+          <dt>How it connects</dt><dd>Wirelessly, as a native camera device on the studio host. No
+            capture card, no cable through the transom door.</dd>
+          <dt>How it is treated</dt><dd>As one more selectable angle. The Producer cuts to it on the
+            same logic it uses for the fixed six.</dd>
+        </dl>
+        <p class="why">This is the piece that changes the format. Six locked-off cameras produce
+          coverage; a camera that can walk produces a show.</p></div>
+
+      <div class="card"><h3>Stream separation</h3><span class="loc">Recorder to studio</span>
+        <dl>
+          <dt>Substreams</dt><dd>Deckner and the Producer read the low-rate feeds for tracking and
+            situational awareness.</dd>
+          <dt>Mainstreams</dt><dd>Only the selected angle is pulled at full rate for the
+            broadcast.</dd>
+        </dl>
+        <p class="why">Machines get the cheapest adequate feed; full quality is reserved for the
+          output people actually watch. Tracking keeps working at frame rate while the encoder is
+          saturating the uplink.</p></div>
+    </div>
+  </section>
+
+  <!-- ================= AUDIO ================= -->
+  <section aria-labelledby="h-audio">
+    <div class="ph"><h2 id="h-audio">Audio</h2>
+      <span class="note">Stereo aboard; the performance close-miked on top of it.</span></div>
+
+    <div class="grid">
+      <div class="card"><h3>Stereo pair</h3><span class="loc">Aboard, fixed</span>
+        <p style="margin:0">A left/right pair capturing the room: the water, the dock, the audience,
+          the boat itself. It gives the stream a place instead of a dry voice on a black background,
+          and it is what lets a cut to the handheld still sound like the same show.</p></div>
+      <div class="card"><h3>Close capture</h3><span class="loc">Interface at the stage</span>
+        <p style="margin:0">Vocal microphone and instrument DI into the USB-C interface — console
+          mic pre and JFET DI at 24-bit / 96 kHz, bus-powered from the studio host. This is the
+          performance; the stereo pair is the space around it.</p></div>
+      <div class="card"><h3>One device, two consumers</h3><span class="loc">Studio host</span>
+        <p style="margin:0">The interface presents as a single system audio input, so the encoder and
+          Lyric Show read the same source without a second cable or a loopback. Captions are
+          generated from the same audio the audience hears.</p></div>
+    </div>
+  </section>
+
+  <!-- ================= HELM ================= -->
+  <section aria-labelledby="h-helm">
+    <div class="ph"><h2 id="h-helm">Helm, navigation and instruments</h2>
+      <span class="note">One NMEA 2000 backbone. Everything downstream listens; nothing writes.</span></div>
+    <ul>
+      <li><strong>Multifunction display with broadband radar</strong> — primary helm screen, radar
+        overlaid for collision avoidance.</li>
+      <li><strong>In-hull depth transducer</strong> — reads through solid fibreglass from inside the
+        bilge. Nothing protrudes, which matters on Keys sandbars.</li>
+      <li><strong>Navigation bridge</strong> — GPS, heading, pitch and roll, and depth, published to
+        both the helm display and the studio network.</li>
+      <li><strong>Autopilot</strong> — commanded over NMEA by the helm display and navigation
+        software, and by nothing else.</li>
+      <li><strong>Tide and weather station</strong> — NOAA tide curves, buoy data and wind vectors,
+        which is also where the ocean-telemetry overlay gets its numbers.</li>
+    </ul>
+    <blockquote><p><strong>Read-only, structurally.</strong> Neither Deckner nor the Producer can
+      write to the helm. That boundary is architectural, not a setting — nothing in either code path
+      can reach the autopilot or the course plotter.</p></blockquote>
+  </section>
+
+  <!-- ================= NETWORK ================= -->
+  <section aria-labelledby="h-net">
+    <div class="ph"><h2 id="h-net">Network</h2>
+      <span class="note">One uplink, one firewall, one flat segment — and the reasons that is temporary.</span></div>
+
+    <div class="stage">
+      <div class="sx">
+      <svg viewBox="0 0 1200 250" role="img"
+           aria-label="Network topology: Starlink feeds a firewall, which feeds a single gigabit switch. The switch carries the studio host, an access point, the navigation bridge, the camera recorder and the agent host on one flat segment.">
+        <defs>
+          <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4fe3ff" fill-opacity=".55"/>
+          </marker>
+        </defs>
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".5" stroke-width="1.2">
+          <rect x="24" y="88" width="156" height="66"/>
+          <rect x="234" y="88" width="156" height="66"/>
+          <rect x="444" y="88" width="156" height="66"/>
+        </g>
+        <text class="lbl" x="102" y="116" text-anchor="middle">STARLINK</text>
+        <text class="lbl-2" x="102" y="134" text-anchor="middle">UPLINK · DOUBLE NAT</text>
+        <text class="lbl" x="312" y="116" text-anchor="middle">FIREWALL</text>
+        <text class="lbl-2" x="312" y="134" text-anchor="middle">ROUTING · DNS · FILTERING</text>
+        <text class="lbl" x="522" y="116" text-anchor="middle">SWITCH</text>
+        <text class="lbl-2" x="522" y="134" text-anchor="middle">GIGABIT · UNMANAGED</text>
+        <path fill="none" stroke="#4fe3ff" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar3)" d="M180,121 L230,121"/>
+        <path fill="none" stroke="#4fe3ff" stroke-opacity=".35" stroke-width="1.2" marker-end="url(#ar3)" d="M390,121 L440,121"/>
+        <g fill="rgba(15,27,43,.9)" stroke="#4fe3ff" stroke-opacity=".4" stroke-width="1.1">
+          <rect x="668" y="16" width="200" height="46"/>
+          <rect x="668" y="72" width="200" height="46"/>
+          <rect x="668" y="128" width="200" height="46"/>
+          <rect x="668" y="184" width="200" height="46"/>
+          <rect x="912" y="100" width="264" height="46"/>
+        </g>
+        <text class="lbl-2" x="768" y="36" text-anchor="middle">STUDIO HOST · PRODUCER · OBS</text>
+        <text class="lbl-2" x="768" y="52" text-anchor="middle">MEDIA LIBRARY · LOCAL MODELS</text>
+        <text class="lbl-2" x="768" y="92" text-anchor="middle">ACCESS POINT</text>
+        <text class="lbl-2" x="768" y="108" text-anchor="middle">BOAT-WIDE WI-FI · HANDHELD</text>
+        <text class="lbl-2" x="768" y="148" text-anchor="middle">NAVIGATION BRIDGE</text>
+        <text class="lbl-2" x="768" y="164" text-anchor="middle">N2K TELEMETRY TO THE LAN</text>
+        <text class="lbl-2" x="768" y="204" text-anchor="middle">AGENT HOST · DECKNER</text>
+        <text class="lbl-2" x="768" y="220" text-anchor="middle">SENSORS · AUTOMATION</text>
+        <text class="lbl-2" x="1044" y="120" text-anchor="middle">CAMERA RECORDER</text>
+        <text class="lbl-2" x="1044" y="136" text-anchor="middle">6 × POE · OWN SEGMENT</text>
+        <g fill="none" stroke="#4fe3ff" stroke-opacity=".3" stroke-width="1.1" marker-end="url(#ar3)">
+          <path d="M600,121 C630,121 636,39 664,39"/>
+          <path d="M600,121 C630,121 636,95 664,95"/>
+          <path d="M600,121 C630,121 636,151 664,151"/>
+          <path d="M600,121 C630,121 636,207 664,207"/>
+        </g>
+        <path fill="none" stroke="#4fe3ff" stroke-opacity=".3" stroke-width="1.1" stroke-dasharray="4 4" marker-end="url(#ar3)" d="M868,123 L908,123"/>
+      </svg>
+      </div>
+      <div class="legend"><span>Architecture only — addresses, identifiers and live configuration are deliberately omitted.</span></div>
+    </div>
+
+    <p>The uplink feeds a firewall, the firewall feeds one switch, and everything hangs off that
+      switch. The firewall's WAN sits behind the uplink's own router, so the boat runs double NAT.
+      That is fine while nothing needs to be reachable from outside; if inbound ports are ever
+      required, the uplink goes into bypass rather than forwarding at two layers.</p>
+    <p>Both switches are unmanaged, so the network cannot be split at the switch. Adding a segment
+      means adding a port at the router — a USB-to-Ethernet adapter becomes a third interface, and
+      camera isolation goes there. Address planning matters more than usual afloat: the LAN was
+      moved off the uplink router's default range entirely, because the same subnet on both sides of
+      a firewall breaks routing in ways that look like random connectivity loss.</p>
+
+    <blockquote class="warn"><p><strong>Known single point of failure.</strong> One box carries
+      routing, Wi-Fi, DNS, camera access and the stream. If it dies, all of them go at once. Worth
+      knowing before it matters.</p></blockquote>
+  </section>
+
+  <!-- ================= OPEN WORK ================= -->
+  <section aria-labelledby="h-open">
+    <div class="ph"><h2 id="h-open">Open work</h2>
+      <span class="note">Ranked by blast radius. Specifics live in the private build sheet, not here.</span></div>
+
+    <div class="grid">
+      <div class="card"><h3>01 · Two resolvers on one segment</h3><span class="loc">Root cause</span>
+        <p style="margin:0">A router that was meant to be demoted to an access point is still
+          routing, and still answering for both address assignment and name resolution. Clients that
+          lease from the wrong one get the wrong gateway, which is why devices intermittently stop
+          seeing each other.</p>
+        <p class="why"><strong>Done looks like:</strong> the old box is an access point and nothing
+          else — no address assignment, no name resolution, one uplink into the switch, its own WAN
+          port unused.</p></div>
+
+      <div class="card"><h3>02 · Firewall admin unreachable</h3><span class="loc">Locks out the fix</span>
+        <p style="margin:0">The firewall's own admin interface does not answer from the LAN. It
+          times out rather than refusing, which points at a rule or a binding rather than a dead
+          service — but it also means the first fault cannot be corrected from a browser.</p>
+        <p class="why"><strong>Done looks like:</strong> console access at the box, the anti-lockout
+          rule restored, and the firewall the only thing on the network assigning addresses or
+          answering names.</p></div>
+
+      <div class="card"><h3>03 · The studio host exposes nothing</h3><span class="loc">Blocks the Producer</span>
+        <p style="margin:0">Remote administration, the studio control socket and the local model
+          endpoint are each either closed or bound to loopback. Until that changes, the agent host
+          cannot reach any of them, and the directing layer is a design rather than a running
+          system.</p>
+        <p class="why"><strong>Done looks like:</strong> remote login enabled, the studio control
+          socket listening, and the local model endpoint reachable from the agent host.</p></div>
+    </div>
+
+    <h3 style="margin:26px 0 10px;font:600 13px/1.3 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--dim)">Also on the list</h3>
+    <ul>
+      <li>Static reservations for the studio host, the agent host, the navigation bridge, the
+        recorder and all six cameras — so the map stops moving.</li>
+      <li>Camera isolation onto a third interface at the firewall, off the segment carrying the
+        studio.</li>
+      <li>A wired run to the navigation bridge, with data output confirmed at the helm.</li>
+      <li>Handheld hand-off tested under load: the Producer cutting to the walking camera while the
+        encoder is already saturating the uplink.</li>
+    </ul>
+
+    <blockquote><p><strong>Sanctuary rules.</strong> Operating inside the Florida Keys National
+      Marine Sanctuary. A 20″ × 24″ dive flag is required whenever the hookah rigs are in the water,
+      and there is no spearfishing and no take inside sanctuary zones.</p></blockquote>
+  </section>
+
+  <!-- ================= WATER ================= -->
+  <section aria-labelledby="h-water">
+    <div class="ph"><h2 id="h-water">Water sports and diving</h2>
+      <span class="note">Swim platform and dive locker.</span></div>
+    <ul>
+      <li><strong>Hookah dive systems</strong> — two surface-supplied rigs plus spare batteries,
+        charged off the bank. Roughly two hours of bottom time without tanks.</li>
+      <li><strong>Boards</strong> — knee, wake and surf for open-water runs.</li>
+      <li><strong>Clear craft</strong> — kayaks and paddleboards for coral and reef viewing at
+        anchor.</li>
+    </ul>
+  </section>
+
+</div>
+
+<footer>
+  <div class="foot">
+    <span>© 2025–2026 Phygital DevOps Inc. · Micah Read</span>
+    <span>Architecture only — no addresses, identifiers or live configuration</span>
+  </div>
+</footer>
+
+</body>
+</html>

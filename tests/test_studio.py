@@ -565,22 +565,22 @@ def test_report_carries_the_competition_block_as_a_copy(db):
 def test_power_budget_matches_hand_arithmetic(db):
     power = studio_report(db)["power"]
     eff = ASSUMPTIONS["inverter_efficiency"][0]
-    assert power["studio_w"] == 318
+    assert power["studio_w"] == 366
     assert [load["name"] for load in power["loads"]] == [
         "Encoder", "Interface", "Starlink", "Cameras", "Lighting", "Monitoring"]
-    assert power["dc_w"] == pytest.approx(318 / eff, abs=0.01)
-    assert power["session_kwh"] == pytest.approx(0.71, abs=0.01)
+    assert power["dc_w"] == pytest.approx(366 / eff, abs=0.01)
+    assert power["session_kwh"] == pytest.approx(0.81, abs=0.01)
     assert power["usable_kwh"] == pytest.approx(13.824, abs=0.01)
-    assert power["hours_on_bank"] == pytest.approx(39.1, abs=0.05)
-    assert power["shows_on_bank"] == pytest.approx(19.6, abs=0.05)
+    assert power["hours_on_bank"] == pytest.approx(33.99, abs=0.05)
+    assert power["shows_on_bank"] == pytest.approx(17.0, abs=0.05)
     assert power["hours_on_bank_with_ac"] < power["hours_on_bank"]
-    assert power["hours_on_bank_with_ac"] == pytest.approx(13.824e3 / ((318 + 1944) / eff),
+    assert power["hours_on_bank_with_ac"] == pytest.approx(13.824e3 / ((366 + 1944) / eff),
                                                            abs=0.01)
     assert power["harvest_high_kwh"] == pytest.approx(11.7, abs=0.01)
-    assert power["session_share_of_solar_day"] == pytest.approx(0.06, abs=0.001)
+    assert power["session_share_of_solar_day"] == pytest.approx(0.07, abs=0.001)
     assert power["generator_leg_w"] == 3600
-    assert power["inverter_utilisation_with_ac"] == pytest.approx(2262 / 4000, abs=0.001)
-    assert power["generator_utilisation_with_ac"] == pytest.approx(2262 / 3600, abs=0.001)
+    assert power["inverter_utilisation_with_ac"] == pytest.approx(2310 / 4000, abs=0.001)
+    assert power["generator_utilisation_with_ac"] == pytest.approx(2310 / 3600, abs=0.001)
 
 
 def test_power_reads_the_vessel_spec_not_a_copy(db):
@@ -588,7 +588,7 @@ def test_power_reads_the_vessel_spec_not_a_copy(db):
     _meta(db, "spec.bank_kwh", "30.72")
     power = studio_report(db)["power"]
     assert power["usable_kwh"] == pytest.approx(30.72 * 0.9, abs=0.01)
-    assert power["hours_on_bank"] == pytest.approx(2 * 39.125, abs=0.1)
+    assert power["hours_on_bank"] == pytest.approx(2 * 33.994, abs=0.1)
 
 
 def test_power_ratios_refuse_rather_than_divide_by_zero(db):

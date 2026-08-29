@@ -1,0 +1,13 @@
+# Headers for the console.
+#
+# netlify.toml's [[headers]] only apply when Netlify builds from the repo. This
+# file travels inside the publish directory, so the same rules hold for a direct
+# upload too — which is how the GitHub Actions workflow deploys.
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate

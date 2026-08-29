@@ -26,6 +26,14 @@ PAGES = [
     ("architecture.html", "Architecture", "Architecture", ROOT / "docs" / "ARCHITECTURE.md"),
 ]
 
+# Hand-written pages that belong in the navigation but are not generated from
+# markdown. `systems.html` is edited directly; the console is a separate
+# deployment (Netlify) and is linked by absolute URL for that reason.
+EXTRA_NAV = [
+    ("systems.html", "Systems"),
+    ("https://opheliaskey-systems.netlify.app/", "Console"),
+]
+
 LEDES = {
     "index.html": "Everything <code>okey</code> ingests, derives and reports — and why it "
                   "would rather say <code>NULL</code> than guess.",
@@ -297,13 +305,14 @@ def build_page(out_name: str, title: str, source: Path) -> None:
         for tok in md.toc_tokens
         if tok["level"] == 2
     )
+    nav = [(fn, label) for fn, label, _, _ in PAGES] + EXTRA_NAV
     pages = "\n".join(
         f'      <a class="page{" here" if fn == out_name else ""}" href="{fn}">{label}</a>'
-        for fn, label, _, _ in PAGES
+        for fn, label in nav
     )
     topnav = "\n".join(
         f'      <a class="chip{" here" if fn == out_name else ""}" href="{fn}">{label}</a>'
-        for fn, label, _, _ in PAGES
+        for fn, label in nav
     )
 
     html = (

@@ -1,8 +1,11 @@
 title: Ophelia's Key
 description: Purchase intelligence for the Ophelia's Key vessel project
 
-# The site is the hand-built index.html; keep source, tests and private
-# screenshots out of the published artifact.
+# GitHub Pages publishes the hand-built index.html and the manual. It does not
+# publish the systems console — that is Netlify's site (see netlify.toml), and
+# keeping it to one host is what makes the two deployments distinct rather than
+# two copies of each other. Source, tests, tooling and private screenshots stay
+# out of the published artifact entirely.
 exclude:
   - README.md
   - docs/
@@ -10,5 +13,7 @@ exclude:
   - tests/
   - secrets/
   - tools/
+  - systems/
+  - netlify.toml
   - pyproject.toml
   - .env.example
