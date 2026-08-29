@@ -1,0 +1,31 @@
+# Netlify publishes the systems console and nothing else.
+#
+# The two deployments are deliberately different sites:
+#   • GitHub Pages  → the landing page and the public manual (repo root, Jekyll)
+#   • Netlify       → this console: the animated systems schematics
+#
+# There is no build step. The console is one self-contained HTML file so it
+# renders identically from Netlify, from `python3 -m http.server`, and from
+# file:// — the same property the manual pages have.
+
+[build]
+  publish = "systems"
+  command = ""
+
+[build.processing]
+  skip_processing = false
+
+# The console documents architecture only. These headers keep it from being
+# framed or sniffed, and stop referrers leaking the URL onward.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

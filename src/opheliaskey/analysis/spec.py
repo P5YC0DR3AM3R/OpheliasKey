@@ -41,9 +41,9 @@ DEFAULT_SPEC: dict[str, float] = {
     "bank_kwh": 15.36,
     "bms_amps_per_unit": 200,
     "bank_units_series": 2,
-    # isolated 12V house bank
+    # isolated 12V house bank, dedicated to the DC side
     "house_12v_amp_hours": 320,
-    "house_12v_voltage": 12,
+    "house_12v_voltage": 12.8,
     # generator
     "generator_watts": 8000,
     "generator_circuit_amps": 30,

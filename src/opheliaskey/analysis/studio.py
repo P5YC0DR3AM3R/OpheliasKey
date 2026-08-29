@@ -188,10 +188,17 @@ FUNNEL_PLANS: tuple[tuple[str, str, int, int | None, str, str | None], ...] = (
 
 STUDIO_ASSUMPTIONS: dict[str, tuple[float, str]] = {
     # power (watts)
-    "load_encoder_w":    (45, "Mac running OBS and the stream encoder, average draw"),
-    "load_interface_w":  (3, "Audient iD4 mkII: USB bus-powered, about 2.5 W"),
+    "load_encoder_w":    (
+        65, ("Studio host running the encoder and the Producer; vision tracking and "
+             "per-source colour correction run continuously, above a plain encode")),
+    "load_interface_w":  (
+        6, ("USB bus-powered audio interfacing for the close pair and the onboard "
+            "stereo pair, phantom power included")),
     "load_starlink_w":   (90, "Starlink dish and router, average; Gen 3 ranges 75–100 W"),
-    "load_cameras_w":    (40, "Performance camera, capture device and confidence monitor"),
+    "load_cameras_w":    (
+        65, ("Six pan-tilt cameras on the recorder's PoE, the recorder itself, and the "
+             "handheld charging between sets; the handheld is wireless, so it costs a "
+             "charger rather than a capture path")),
     "load_lighting_w":   (80, "Two LED panels at show brightness"),
     "load_monitoring_w": (60, "Performer monitoring and PA at show level"),
     "show_hours":        (2.0, "A livestream set: setup, the show and the encore"),

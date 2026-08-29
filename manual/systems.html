@@ -155,6 +155,7 @@
       <a class="chip" href="index.html">The manual</a>
       <a class="chip" href="architecture.html">Architecture</a>
       <a class="chip here" href="systems.html">Systems</a>
+      <a class="chip" href="https://opheliaskey-systems.netlify.app/">Console</a>
       <a class="chip needs-server" href="../ledger">Ledger</a>
       <a class="chip" href="https://github.com/P5YC0DR3AM3R/OpheliasKey">GitHub</a>
     </nav>
@@ -169,6 +170,7 @@
       <a class="page" href="index.html">The manual</a>
       <a class="page" href="architecture.html">Architecture</a>
       <a class="page here" href="systems.html">Systems</a>
+      <a class="page" href="https://opheliaskey-systems.netlify.app/">Systems console</a>
       <h4>The numbers</h4>
       <a class="page needs-server" href="../ledger">Ledger</a>
       <a class="page needs-server" href="../review">Review</a>
@@ -180,8 +182,9 @@
       <a href="#power">Power</a>
       <a href="#helm">Helm and navigation</a>
       <a href="#vision">Vision and security</a>
+      <a href="#audio">Audio</a>
       <a href="#net">Core networking</a>
-      <a href="#director">AI director</a>
+      <a href="#director">Direction</a>
       <a href="#water">Water sports</a>
       <a href="#principles">Design principles</a>
       <a href="#method">Method</a>
@@ -191,7 +194,7 @@
   <main class="doc">
   <div class="doc-head">
     <h1>Vessel <span>systems</span></h1>
-    <p>How the boat is put together: power, navigation, surveillance, network and broadcast — and the reasoning behind each choice. Addresses, hardware identifiers and current fault state are deliberately omitted; this page documents architecture, not configuration.</p>
+    <p>How the boat is put together: power, navigation, surveillance, network and broadcast — and the reasoning behind each choice. Addresses, hardware identifiers and current fault state are deliberately omitted; this page documents architecture, not configuration. The same systems are drawn as animated schematics on the <a href="https://opheliaskey-systems.netlify.app/">systems console</a>.</p>
   </div>
 
   <h2 id="topology">Topology</h2>
@@ -199,8 +202,8 @@
   <pre><code>Starlink Roam
  └─ OPNsense firewall          gateway · DHCP · DNS
      └─ 8-port gigabit switch  LAN spine
-         ├─ workstation        broadcast + media
-         ├─ access point       boat-wide Wi-Fi
+         ├─ workstation        the Producer + broadcast + media
+         ├─ access point       boat-wide Wi-Fi · handheld camera
          ├─ navigation bridge  N2K telemetry
          ├─ camera NVR         PoE, 6 cameras
          └─ agent host         sensors + automation</code></pre>
@@ -209,9 +212,13 @@
 
   <h2 id="power">Power</h2>
   <h3>Generation</h3>
-  <p>A 2,000 W flexible solar array handles the standing load. An 8,000 W inverter generator covers heavy AC draw and fast recharge cycles when solar cannot keep up.</p>
+  <p>A 4,000 W flexible solar array carries the standing load and the show on top of it — eight panels, four in series and two strings in parallel, into a single 140 A MPPT controller. An 8,000 W inverter generator remains aboard for heavy AC draw and fast recharge, but at this array size it is a backup rather than part of the broadcast plan.</p>
   <h3>Storage</h3>
-  <p>12.8 V 600 Ah LiFePO₄ — roughly <code>7.7 kWh</code> usable. That bank carries every 12 V and 120 V load, the full IT stack and the dive-system chargers continuously, which is why the agent host was chosen for single-digit idle watts rather than raw speed.</p>
+  <p>Two banks, kept apart. A 25.6 V bank of two 600 Ah LiFePO₄ units in series — <code>15.4 kWh</code> nameplate, about <code>13.8 kWh</code> usable — sits behind the 4,000 W inverter and carries the 120 V side. A separate 12.8 V 320 Ah bank — <code>4.1 kWh</code> nameplate — is reserved for DC house loads and charged from the main chassis through an isolating DC-DC converter.</p>
+  <p>Separating them is the point. A long broadcast is allowed to draw the boat's stored energy down; it is not allowed to flatten the bank that runs the navigation lights, the bilge pumps and the network. The agent host was still chosen for single-digit idle watts rather than raw speed, because the DC side has to survive the nights when nothing is generating.</p>
+  <h3>What a show costs</h3>
+  <p>Encoder, interface, uplink, cameras, lighting and monitoring come to roughly 366 W of AC draw — about <code>0.81 kWh</code> at the bank across a two-hour set. Even a poor solar day harvests a dozen times that. That is the practical change 4,000 W bought: the generator stopped being something the broadcast schedule had to plan around.</p>
+  <p>The isolated DC bank still has no confirmed charging path. The specified charging equipment is all 25.6 V, so the house side needs a DC-DC charger from the main chassis, its own controller, or an alternator feed. Deliberate isolation is a sound design; isolation without a way in is a flat bank.</p>
 
   <h2 id="helm">Helm and navigation</h2>
   <p>Instruments share an NMEA 2000 backbone.</p>
@@ -227,15 +234,26 @@
   <h2 id="vision">Vision and security</h2>
   <p>Six 5 MP pan-tilt cameras run off the recorder's built-in PoE, which keeps them on the recorder's own segment instead of the main network. Six budget cameras running vendor firmware do not belong on the same segment as the workstation and the firewall's admin interface.</p>
   <p>Coverage splits between inward views for performance capture and outward views for waterline and dock approaches, with elevated positions for the wide master shot.</p>
+  <h3>The handheld</h3>
+  <p>A phone running Continuity Camera joins the rig wirelessly as a native camera device on the studio host — no capture card, and no cable through the transom door. It walks the deck, the swim platform and the dock, and the Producer treats it as one more selectable angle rather than a special case. Six locked-off cameras produce coverage; a camera that can move produces a show.</p>
   <h3>Stream separation</h3>
   <p>The agent pulls <strong>substreams</strong> over RTSP for motion detection and attention routing. The broadcast encoder takes <strong>mainstreams</strong>. Splitting them means situational awareness and the live stream never compete for the same bandwidth — the agent keeps working at full frame rate while the encoder is saturating the uplink.</p>
+
+  <h2 id="audio">Audio</h2>
+  <p>A stereo pair aboard captures the room — the water, the dock, the audience and the boat itself. It gives the stream a place instead of a dry voice on a black background, and it is what lets a cut to the handheld still sound like the same show rather than a different recording.</p>
+  <p>The performance sits on top of that: vocal microphone and instrument DI into a USB-C interface at 24-bit / 96 kHz, bus-powered from the studio host. The interface presents as a single system audio input, so the encoder and the caption overlay read the same source without a second cable or a loopback — captions are generated from the audio the audience actually hears.</p>
 
   <h2 id="net">Core networking</h2>
   <p>The firewall handles routing, DNS over TLS and network-level ad-blocking. Because both switches are unmanaged, adding a segment means adding a port at the router: a USB-to-Ethernet adapter with a Realtek RTL8153 or ASIX AX88179 chipset works without extra drivers and becomes a third interface. Camera isolation goes there.</p>
   <p>Address planning matters more than usual afloat. Starlink's router hands out a common private range, so the LAN was moved off that range entirely — same subnet on both sides of a firewall breaks routing in ways that look like random connectivity loss.</p>
 
-  <h2 id="director">AI director</h2>
-  <p>The agent ingests camera feeds, multi-track audio and navigation telemetry to drive vision tracking and situational awareness, then issues local WebSocket commands to the broadcast software to switch angles, frame performers and render live ocean-telemetry overlays. Output encodes to YouTube and Twitch over the satellite uplink.</p>
+  <h2 id="director">Direction</h2>
+  <p>Two layers, deliberately separate.</p>
+  <h3>The vessel agent</h3>
+  <p>The agent ingests camera substreams, multi-track audio and navigation telemetry to drive vision tracking and situational awareness. It knows what is happening aboard. It has never had an opinion about which shot is interesting, and it is read-only on navigation.</p>
+  <h3>The Producer</h3>
+  <p>The Producer is that opinion. It sits above the agent and drives the studio over a local WebSocket: it tracks a performer across the frame and commands the pan-tilt head to keep them composed rather than merely centred, pushes in on a moment and pulls back out before the shot gets claustrophobic, chooses which of the seven angles is live, paces the cuts so none of them goes stale, colour-corrects each source so a batch of budget cameras and a phone do not visibly disagree about what white is, and draws the lower thirds and live ocean-telemetry overlays. Output encodes to YouTube and Twitch over the satellite uplink.</p>
+  <p>The split follows the same fault-isolation rule as the rest of the boat: a bad call in the directing layer should cost a dull cut, not a missed engine alarm. The agent keeps running if the Producer stops, and neither has a code path to the helm — the Producer can reach the studio and nothing else.</p>
   <p>Offline, the same machine hosts a large emulation library — the boat is frequently out of coverage, and entertainment that depends on the uplink is entertainment that stops working at anchor.</p>
 
   <h2 id="water">Water sports</h2>
