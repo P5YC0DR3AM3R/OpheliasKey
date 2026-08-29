@@ -1,0 +1,44 @@
+headersOrigin = "config"
+plugins = []
+redirects = []
+
+[functions]
+
+[functions."*"]
+
+[build]
+publish = "/Volumes/MacMiniSSD2TB/OpheliasKey/.claude/worktrees/netlify-github-deployments-d7d6bb/systems"
+publishOrigin = "config"
+commandOrigin = "ui"
+base = "/Volumes/MacMiniSSD2TB/OpheliasKey/.claude/worktrees/netlify-github-deployments-d7d6bb"
+command = "bundle exec jekyll build"
+
+[build.environment]
+
+[build.processing]
+skip_processing = false
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[[headers]]
+for = "/*"
+
+[headers.values]
+X-Frame-Options = "DENY"
+X-Content-Type-Options = "nosniff"
+Referrer-Policy = "no-referrer"
+Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+[[headers]]
+for = "/index.html"
+
+[headers.values]
+Cache-Control = "public, max-age=0, must-revalidate"

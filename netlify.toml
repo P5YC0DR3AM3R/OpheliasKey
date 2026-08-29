@@ -4,13 +4,24 @@
 #   • GitHub Pages  → the landing page and the public manual (repo root, Jekyll)
 #   • Netlify       → this console: the animated systems schematics
 #
+# This project is git-linked to the repo and builds `main`, so a merge here is
+# the deploy. It used to carry GitHub Pages' own build command in its UI
+# settings — `bundle exec jekyll build` into `_site` — which failed every time
+# because the Netlify half of this repo is not a Jekyll site. Those settings are
+# now cleared: no command, publish `systems`.
+#
+# Security headers live in systems/_headers rather than here, because the ones
+# below only apply to builds and the guard workflow uploads the directory
+# directly. Keep the two in step.
+#
 # There is no build step. The console is one self-contained HTML file so it
 # renders identically from Netlify, from `python3 -m http.server`, and from
 # file:// — the same property the manual pages have.
 
+# No build step at all: an empty `command` is still executed and exits non-zero,
+# so the key is to omit it entirely and let Netlify publish the directory as-is.
 [build]
   publish = "systems"
-  command = ""
 
 [build.processing]
   skip_processing = false
